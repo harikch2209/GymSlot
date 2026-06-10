@@ -1,137 +1,243 @@
 import React from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextStyle,
-  View,
-  ViewStyle,
+  ActivityIndicator, Pressable, StyleSheet, Text, TextInput, TextProps,
+  TextStyle, View, ViewStyle, TextInputProps,
 } from 'react-native';
-import { colors, font, radius, spacing } from '@/theme';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { colors, radius, shadow, spacing, type as T } from '@/theme';
 
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.card, style]}>{children}</View>;
-}
+export { Ionicons } from '@expo/vector-icons';
 
-export function Pill({
-  label,
-  color = colors.textMuted,
-  bg = colors.surfaceAlt,
-  style,
-}: {
-  label: string;
-  color?: string;
-  bg?: string;
-  style?: ViewStyle;
-}) {
+type TypeToken = keyof typeof T;
+
+/** Text that applies a type-scale token + color. Use everywhere instead of raw <Text>. */
+export function AppText({
+  variant = 'body', color = colors.text, style, children, ...rest
+}: TextProps & { variant?: TypeToken; color?: string }) {
   return (
-    <View style={[styles.pill, { backgroundColor: bg }, style]}>
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
-    </View>
+    <Text {...rest} style={[T[variant], { color }, style]}>
+      {children}
+    </Text>
   );
 }
 
+export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+  return <View style={[styles.screen, style]}>{children}</View>;
+}
+
+export function Card({
+  children, style, padded = true,
+}: { children: React.ReactNode; style?: ViewStyle; padded?: boolean }) {
+  return <View style={[styles.card, padded && { padding: spacing.lg }, style]}>{children}</View>;
+}
+
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dark';
+type ButtonSize = 'sm' | 'md' | 'lg';
+
 export function Button({
-  title,
-  onPress,
-  variant = 'primary',
-  disabled,
-  loading,
-  style,
+  title, onPress, variant = 'primary', size = 'lg', disabled, loading, icon, style, fullWidth, fg: fgOverride,
 }: {
   title: string;
   onPress?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
   style?: ViewStyle;
+  fullWidth?: boolean;
+  /** Override foreground (text/icon) color — handy for ghost buttons on dark art. */
+  fg?: string;
 }) {
-  const bg =
-    variant === 'primary'
-      ? colors.primary
-      : variant === 'danger'
-        ? colors.danger
-        : variant === 'secondary'
-          ? colors.surfaceAlt
-          : 'transparent';
-  const textColor = variant === 'primary' || variant === 'danger' ? colors.bg : colors.text;
+  const palette: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
+    primary: { bg: colors.primary, fg: colors.onPrimary },
+    dark: { bg: colors.ink, fg: colors.onDark },
+    danger: { bg: colors.danger, fg: '#fff' },
+    secondary: { bg: colors.surfaceAlt, fg: colors.text },
+    ghost: { bg: 'transparent', fg: colors.text, border: colors.borderStrong },
+  };
+  const p = { ...palette[variant], fg: fgOverride ?? palette[variant].fg };
+  const h = size === 'sm' ? 40 : size === 'md' ? 48 : 54;
+  const handle = () => {
+    if (disabled || loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onPress?.();
+  };
   return (
     <Pressable
-      onPress={disabled || loading ? undefined : onPress}
+      onPress={handle}
+      disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
+      accessibilityLabel={title}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
-        variant === 'ghost' && styles.buttonGhost,
+        {
+          height: h,
+          backgroundColor: p.bg,
+          borderWidth: p.border ? 1.5 : 0,
+          borderColor: p.border,
+          opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
+        },
+        variant === 'primary' && !disabled && shadow.sm,
+        fullWidth && { alignSelf: 'stretch' },
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={textColor} />
+        <ActivityIndicator color={p.fg} />
       ) : (
-        <Text style={[styles.buttonText, { color: textColor }]}>{title}</Text>
+        <View style={styles.buttonInner}>
+          {icon && <Ionicons name={icon} size={size === 'sm' ? 16 : 19} color={p.fg} />}
+          <Text style={[T.bodyStrong, { color: p.fg, fontSize: size === 'sm' ? 14 : 16 }]}>{title}</Text>
+        </View>
       )}
     </Pressable>
   );
 }
 
-export function Row({
-  children,
-  style,
-  gap = spacing.sm,
+/** Small status/label chip. */
+export function Badge({
+  label, color = colors.text, bg = colors.surfaceAlt, icon, style,
 }: {
-  children: React.ReactNode;
-  style?: ViewStyle;
-  gap?: number;
+  label: string; color?: string; bg?: string;
+  icon?: keyof typeof Ionicons.glyphMap; style?: ViewStyle;
 }) {
-  return <View style={[styles.row, { gap }, style]}>{children}</View>;
+  return (
+    <View style={[styles.badge, { backgroundColor: bg }, style]}>
+      {icon && <Ionicons name={icon} size={12} color={color} />}
+      <Text style={[T.tiny, { color }]}>{label}</Text>
+    </View>
+  );
 }
 
-export function SectionTitle({ children, style }: { children: React.ReactNode; style?: TextStyle }) {
-  return <Text style={[styles.sectionTitle, style]}>{children}</Text>;
+/** Selectable filter chip. */
+export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+  return (
+    <Pressable
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress?.(); }}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      style={[styles.chip, active && styles.chipActive]}
+    >
+      <Text style={[T.smallStrong, { color: active ? colors.onPrimary : colors.textMuted }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function Field({
+  label, error, icon, style, ...rest
+}: TextInputProps & {
+  label?: string; error?: string | null; icon?: keyof typeof Ionicons.glyphMap; style?: ViewStyle;
+}) {
+  return (
+    <View style={style}>
+      {label && <Text style={[T.smallStrong, { color: colors.textMuted, marginBottom: 6 }]}>{label}</Text>}
+      <View style={[styles.field, error && { borderColor: colors.danger }]}>
+        {icon && <Ionicons name={icon} size={18} color={colors.textSubtle} style={{ marginRight: 8 }} />}
+        <TextInput
+          placeholderTextColor={colors.textSubtle}
+          style={[T.body, { flex: 1, color: colors.text, paddingVertical: 14 }]}
+          {...rest}
+        />
+      </View>
+      {!!error && <Text style={[T.small, { color: colors.danger, marginTop: 5 }]}>{error}</Text>}
+    </View>
+  );
+}
+
+export function Avatar({ name, size = 44 }: { name: string; size?: number }) {
+  const init = name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || 'GS';
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[T.h3, { color: colors.onPrimary, fontSize: size * 0.38 }]}>{init}</Text>
+    </View>
+  );
+}
+
+export function Stars({ rating, reviews }: { rating: number; reviews?: number }) {
+  return (
+    <View style={styles.row}>
+      <Ionicons name="star" size={13} color={colors.star} />
+      <Text style={[T.smallStrong, { color: colors.text, marginLeft: 3 }]}>{rating.toFixed(1)}</Text>
+      {reviews !== undefined && (
+        <Text style={[T.small, { color: colors.textSubtle, marginLeft: 4 }]}>({reviews})</Text>
+      )}
+    </View>
+  );
+}
+
+export function Divider({ style }: { style?: ViewStyle }) {
+  return <View style={[styles.divider, style]} />;
+}
+
+export function SectionHeader({
+  title, action, onAction,
+}: { title: string; action?: string; onAction?: () => void }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={T.h2}>{title}</Text>
+      {action && (
+        <Pressable onPress={onAction} accessibilityRole="button">
+          <Text style={[T.smallStrong, { color: colors.primary }]}>{action}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+export function EmptyState({
+  icon = 'sparkles-outline', title, body, action, onAction,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap; title: string; body?: string;
+  action?: string; onAction?: () => void;
+}) {
+  return (
+    <View style={styles.empty}>
+      <View style={styles.emptyIcon}>
+        <Ionicons name={icon} size={30} color={colors.primary} />
+      </View>
+      <Text style={[T.h3, { textAlign: 'center' }]}>{title}</Text>
+      {body && <Text style={[T.small, { color: colors.textMuted, textAlign: 'center', marginTop: 6 }]}>{body}</Text>}
+      {action && <Button title={action} onPress={onAction} style={{ marginTop: spacing.lg, alignSelf: 'stretch' }} />}
+    </View>
+  );
+}
+
+/** Shimmer-free skeleton block. */
+export function Skeleton({ height = 16, width, radius: r = radius.sm, style }: {
+  height?: number; width?: number | string; radius?: number; style?: ViewStyle;
+}) {
+  return <View style={[{ height, width: (width as any) ?? '100%', borderRadius: r, backgroundColor: colors.surfaceSunken }, style]} />;
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
+  screen: { flex: 1, backgroundColor: colors.bgSubtle },
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, ...shadow.sm },
+  button: { borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  buttonInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.pill,
   },
-  pill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    alignSelf: 'flex-start',
+  chip: {
+    paddingHorizontal: spacing.lg, paddingVertical: 9, borderRadius: radius.pill,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
-  pillText: {
-    fontSize: font.tiny,
-    fontWeight: '700',
+  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  field: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+    borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md,
   },
-  button: {
-    height: 52,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  buttonGhost: {
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  buttonText: {
-    fontSize: font.body,
-    fontWeight: '700',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: font.h3,
-    fontWeight: '800',
-    marginBottom: spacing.md,
+  avatar: { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  empty: { alignItems: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primaryTint,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
   },
 });

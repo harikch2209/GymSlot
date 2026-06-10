@@ -1,50 +1,48 @@
 import React, { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { colors, font, radius, spacing } from '@/theme';
-import { Button, Card, Pill } from '@/components/ui';
+import { colors, radius, shadow, spacing } from '@/theme';
+import { AppText, Badge, Button, Card, Divider, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { inr } from '@/utils/format';
 import { Booking } from '@/types';
 
 export default function BookingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bookings, cancelBooking } = useApp();
+  const { bookings, cancelBooking, loading, refreshing, refresh } = useApp();
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const filtered = bookings.filter((b) =>
-    tab === 'upcoming' ? b.status === 'Confirmed' : b.status !== 'Confirmed',
-  );
+  const filtered = bookings.filter((b) => (tab === 'upcoming' ? b.status === 'Confirmed' : b.status !== 'Confirmed'));
 
   const onCancel = (b: Booking) => {
-    Alert.alert(
-      'Cancel booking?',
-      'Choose how you want your refund. Instant credits include a 5% bonus.',
-      [
-        { text: 'Keep booking', style: 'cancel' },
-        {
-          text: 'Refund to source',
-          onPress: () => cancelBooking(b.id, false),
-        },
-        {
-          text: 'Instant credits +5%',
-          onPress: () => cancelBooking(b.id, true),
-        },
-      ],
-    );
+    Alert.alert('Cancel booking?', 'Choose how you want your refund. Instant credits include a 5% bonus.', [
+      { text: 'Keep booking', style: 'cancel' },
+      { text: 'Refund to source', onPress: () => runCancel(b.id, false) },
+      { text: 'Instant credits +5%', onPress: () => runCancel(b.id, true) },
+    ]);
   };
+  const runCancel = async (id: string, asCredits: boolean) => {
+    setBusyId(id);
+    try { await cancelBooking(id, asCredits); }
+    catch (e) { Alert.alert('Could not cancel', e instanceof Error ? e.message : 'Try again.'); }
+    finally { setBusyId(null); }
+  };
+
+  const statusColor = (s: Booking['status']) =>
+    s === 'Confirmed' ? colors.primary : s === 'Completed' ? colors.accent : colors.danger;
+  const statusBg = (s: Booking['status']) =>
+    s === 'Confirmed' ? colors.primaryTint : s === 'Completed' ? colors.accentTint : colors.dangerTint;
 
   return (
     <View style={styles.container}>
       <View style={styles.tabs}>
         {(['upcoming', 'past'] as const).map((t) => (
-          <Pressable key={t} onPress={() => setTab(t)} style={styles.tabBtn}>
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'upcoming' ? 'Upcoming' : 'Past'}
-            </Text>
-            {tab === t && <View style={styles.tabUnderline} />}
+          <Pressable key={t} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: tab === t }} style={styles.tabBtn}>
+            <AppText variant="bodyStrong" color={tab === t ? colors.text : colors.textSubtle}>{t === 'upcoming' ? 'Upcoming' : 'Past'}</AppText>
+            {tab === t && <View style={styles.underline} />}
           </Pressable>
         ))}
       </View>
@@ -52,68 +50,55 @@ export default function BookingsScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(b) => b.id}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + spacing.xl, flexGrow: 1 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
         renderItem={({ item }) => (
           <Card style={{ marginBottom: spacing.md }}>
             <View style={styles.headerRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gymName}>{item.gymName}</Text>
-                <Text style={styles.muted}>
-                  {item.date} · {item.title}
-                </Text>
+              <View style={[styles.kindIcon, { backgroundColor: statusBg(item.status) }]}>
+                <Ionicons name={item.kind === 'event' ? 'flash' : 'barbell'} size={18} color={statusColor(item.status)} />
               </View>
-              <Pill
-                label={item.status}
-                color={
-                  item.status === 'Confirmed'
-                    ? colors.primary
-                    : item.status === 'Completed'
-                      ? colors.accent
-                      : colors.danger
-                }
-              />
+              <View style={{ flex: 1 }}>
+                <AppText variant="h3" numberOfLines={1}>{item.gymName}</AppText>
+                <AppText variant="small" color={colors.textMuted}>{item.date} · {item.title}</AppText>
+              </View>
+              <Badge label={item.status} color={statusColor(item.status)} bg={statusBg(item.status)} />
             </View>
 
             {item.trainerName && (
-              <Text style={styles.trainer}>🏋️ Trainer: {item.trainerName}</Text>
+              <View style={styles.trainerRow}>
+                <Ionicons name="person-outline" size={14} color={colors.textMuted} />
+                <AppText variant="small" color={colors.textMuted}>Trainer: {item.trainerName}</AppText>
+              </View>
             )}
 
-            <View style={styles.divider} />
+            <Divider />
             <View style={styles.footerRow}>
-              <Text style={styles.amount}>{inr(item.amountPaid + item.creditsUsed)}</Text>
+              <View>
+                <AppText variant="tiny" color={colors.textSubtle}>TOTAL</AppText>
+                <AppText variant="h3">{inr(item.amountPaid + item.creditsUsed)}</AppText>
+              </View>
               <View style={styles.actions}>
-                <Button
-                  title="View QR"
-                  variant="secondary"
-                  onPress={() => router.push(`/ticket/${item.id}`)}
-                  style={styles.actionBtn}
-                />
+                <Button title="View QR" variant="secondary" size="sm" icon="qr-code-outline" onPress={() => router.push(`/ticket/${item.id}`)} />
                 {item.status === 'Confirmed' && (
-                  <Button
-                    title="Cancel"
-                    variant="ghost"
-                    onPress={() => onCancel(item)}
-                    style={styles.actionBtn}
-                  />
+                  <Button title="Cancel" variant="ghost" size="sm" loading={busyId === item.id} onPress={() => onCancel(item)} />
                 )}
               </View>
             </View>
           </Card>
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.muted}>
-              No {tab} bookings yet. Find a gym and book your first slot.
-            </Text>
-            {tab === 'upcoming' && (
-              <Button
-                title="Discover gyms"
-                onPress={() => router.push('/(tabs)')}
-                style={{ marginTop: spacing.lg, alignSelf: 'stretch' }}
-              />
-            )}
-          </View>
+          loading ? (
+            <View style={{ gap: spacing.md }}>
+              {[0, 1].map((i) => <View key={i} style={[styles.skeleton]}><Skeleton height={80} /></View>)}
+            </View>
+          ) : (
+            <EmptyState icon="calendar-outline" title={`No ${tab} bookings`}
+              body={tab === 'upcoming' ? 'Find a gym and book your first slot.' : 'Your completed and cancelled bookings show up here.'}
+              action={tab === 'upcoming' ? 'Discover gyms' : undefined}
+              onAction={() => router.push('/(tabs)')} />
+          )
         }
       />
     </View>
@@ -121,27 +106,14 @@ export default function BookingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  tabs: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.xl },
+  container: { flex: 1, backgroundColor: colors.bgSubtle },
+  tabs: { flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border },
   tabBtn: { paddingVertical: spacing.md, alignItems: 'center' },
-  tabText: { color: colors.textMuted, fontSize: font.body, fontWeight: '700' },
-  tabTextActive: { color: colors.text },
-  tabUnderline: {
-    height: 3,
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-    marginTop: 6,
-  },
-  muted: { color: colors.textMuted, fontSize: font.small, marginTop: 2, textAlign: 'center' },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  gymName: { color: colors.text, fontSize: font.h3, fontWeight: '800' },
-  trainer: { color: colors.textMuted, fontSize: font.small, marginTop: spacing.sm },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
+  underline: { height: 3, width: '100%', backgroundColor: colors.ink, borderRadius: 2, marginTop: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  kindIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  trainerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  amount: { color: colors.text, fontSize: font.h3, fontWeight: '900' },
   actions: { flexDirection: 'row', gap: spacing.sm },
-  actionBtn: { height: 40, paddingHorizontal: spacing.md },
-  empty: { alignItems: 'center', marginTop: spacing.xxl * 2, paddingHorizontal: spacing.xl },
-  emptyEmoji: { fontSize: 48, marginBottom: spacing.md },
+  skeleton: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, ...shadow.sm },
 });

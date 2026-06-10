@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://achbypmmiblntmbhrijm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjaGJ5cG1taWJsbnRtYmhyaWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg1NDQsImV4cCI6MjA5NjY3NDU0NH0.jCKiH2tDUdtuHlTdBpyDhx8aEh2ht7B7A-MylFkCA7o"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": false },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://achbypmmiblntmbhrijm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjaGJ5cG1taWJsbnRtYmhyaWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg1NDQsImV4cCI6MjA5NjY3NDU0NH0.jCKiH2tDUdtuHlTdBpyDhx8aEh2ht7B7A-MylFkCA7o"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://achbypmmiblntmbhrijm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjaGJ5cG1taWJsbnRtYmhyaWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg1NDQsImV4cCI6MjA5NjY3NDU0NH0.jCKiH2tDUdtuHlTdBpyDhx8aEh2ht7B7A-MylFkCA7o"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL",
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "REPLACE_WITH_APPLE_TEAM_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}

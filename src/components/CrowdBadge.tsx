@@ -1,48 +1,46 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, spacing } from '@/theme';
+import { StyleSheet, View } from 'react-native';
+import { colors, radius, type as T } from '@/theme';
 import { CrowdLevel } from '@/types';
-import { crowdColor, crowdLabel } from '@/utils/format';
+import { ago, crowdColor, crowdLabel } from '@/utils/format';
+import { AppText } from './ui';
 
 export function CrowdBadge({
-  level,
-  updatedMinsAgo,
-  showTimestamp = false,
+  level, updatedMinsAgo, showTimestamp = false, onLight = false,
 }: {
   level: CrowdLevel;
   updatedMinsAgo?: number;
   showTimestamp?: boolean;
+  /** When true, renders a solid pill suitable for placing over a photo. */
+  onLight?: boolean;
 }) {
   const color = crowdColor(level);
   return (
-    <View style={styles.wrap}>
-      <View style={[styles.badge, { borderColor: color }]}>
+    <View style={{ alignItems: 'flex-start', gap: 3 }}>
+      <View
+        style={[
+          styles.badge,
+          onLight
+            ? { backgroundColor: 'rgba(255,255,255,0.95)' }
+            : { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+        ]}
+      >
         <View style={[styles.dot, { backgroundColor: color }]} />
-        <Text style={[styles.label, { color }]}>{crowdLabel(level)}</Text>
+        <AppText variant="tiny" color={colors.text}>{crowdLabel(level)}</AppText>
       </View>
       {showTimestamp && updatedMinsAgo !== undefined && (
-        <Text style={styles.timestamp}>
-          {level === 'Unknown'
-            ? `No signal for ${updatedMinsAgo} min`
-            : `Updated ${updatedMinsAgo} min ago`}
-        </Text>
+        <AppText variant="small" color={colors.textSubtle}>
+          {level === 'Unknown' ? `No signal · ${ago(updatedMinsAgo)}` : `Updated ${ago(updatedMinsAgo)}`}
+        </AppText>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'flex-start', gap: 2 },
   badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { fontSize: font.tiny, fontWeight: '800' },
-  timestamp: { fontSize: 10, color: colors.textMuted },
+  dot: { width: 7, height: 7, borderRadius: 4 },
 });

@@ -1,175 +1,146 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GYMS } from '@/data/gyms';
+import { fetchGyms } from '@/lib/api';
+import { useResource } from '@/hooks/useResource';
 import { GymCard } from '@/components/GymCard';
-import { colors, font, radius, spacing } from '@/theme';
-import { Amenity, CrowdLevel } from '@/types';
+import { AppText, Avatar, Chip, EmptyState, Ionicons, Skeleton } from '@/components/ui';
+import { colors, radius, shadow, spacing, type as T } from '@/theme';
+import { Amenity, CrowdLevel, Gym } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
-type SortKey = 'distance' | 'price' | 'rating';
-
-const CROWD_FILTERS: CrowdLevel[] = ['Low', 'Moderate', 'High'];
-const AMENITY_FILTERS: Amenity[] = ['Cardio', 'Weights', 'Shower', 'Parking', 'AC'];
+type SortKey = 'rating' | 'price' | 'distance';
+const CROWD: CrowdLevel[] = ['Low', 'Moderate', 'High'];
+const AMENITIES: Amenity[] = ['Cardio', 'Weights', 'Shower', 'Parking', 'AC'];
 
 export default function DiscoverScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { data, loading, error, refreshing, refresh, reload } = useResource(fetchGyms, []);
+
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortKey>('distance');
+  const [sort, setSort] = useState<SortKey>('rating');
   const [crowd, setCrowd] = useState<CrowdLevel | null>(null);
   const [amenity, setAmenity] = useState<Amenity | null>(null);
 
-  const data = useMemo(() => {
-    let list = GYMS.filter((g) => {
-      const matchesQuery =
-        !query ||
-        g.name.toLowerCase().includes(query.toLowerCase()) ||
-        g.area.toLowerCase().includes(query.toLowerCase());
-      const matchesCrowd = !crowd || g.crowd === crowd;
-      const matchesAmenity = !amenity || g.amenities.includes(amenity);
-      return matchesQuery && matchesCrowd && matchesAmenity;
+  const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] ?? 'there';
+
+  const gyms = useMemo<Gym[]>(() => {
+    let list = (data ?? []).filter((g) => {
+      const q = query.trim().toLowerCase();
+      const matchQ = !q || g.name.toLowerCase().includes(q) || g.area.toLowerCase().includes(q);
+      const matchC = !crowd || g.crowd === crowd;
+      const matchA = !amenity || g.amenities.includes(amenity);
+      return matchQ && matchC && matchA;
     });
-    list = [...list].sort((a, b) => {
-      if (sort === 'price') return a.priceFrom - b.priceFrom;
-      if (sort === 'rating') return b.rating - a.rating;
-      return a.distanceKm - b.distanceKm;
-    });
+    list = [...list].sort((a, b) =>
+      sort === 'price' ? a.priceFrom - b.priceFrom
+        : sort === 'distance' ? (a.distanceKm ?? 99) - (b.distanceKm ?? 99)
+          : b.rating - a.rating);
     return list;
-  }, [query, sort, crowd, amenity]);
+  }, [data, query, sort, crowd, amenity]);
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={data}
+        data={gyms}
         keyExtractor={(g) => g.id}
-        renderItem={({ item }) => (
-          <GymCard gym={item} onPress={() => router.push(`/gym/${item.id}`)} />
-        )}
-        contentContainerStyle={{
-          padding: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xl,
-        }}
+        renderItem={({ item }) => <GymCard gym={item} onPress={() => router.push(`/gym/${item.id}`)} />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
         ListHeaderComponent={
-          <View style={{ marginBottom: spacing.md }}>
-            <View style={styles.searchBar}>
-              <Text style={styles.searchIcon}>🔍</Text>
+          <View style={{ paddingTop: insets.top + spacing.md }}>
+            <View style={styles.topRow}>
+              <View>
+                <View style={styles.locRow}>
+                  <Ionicons name="location" size={14} color={colors.primary} />
+                  <AppText variant="smallStrong" color={colors.textMuted}>Bengaluru</AppText>
+                </View>
+                <AppText variant="h1" style={{ marginTop: 2 }}>Hi {firstName} 👋</AppText>
+              </View>
+              <Avatar name={(user?.user_metadata?.full_name as string) ?? 'GymSlot'} />
+            </View>
+
+            <View style={styles.search}>
+              <Ionicons name="search" size={18} color={colors.textSubtle} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder="Search gym or area"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textSubtle}
                 style={styles.searchInput}
+                returnKeyType="search"
+                accessibilityLabel="Search gyms"
               />
+              {query.length > 0 && (
+                <Ionicons name="close-circle" size={18} color={colors.textSubtle} onPress={() => setQuery('')} />
+              )}
             </View>
 
-            <FilterRow title="Sort">
-              {(['distance', 'price', 'rating'] as SortKey[]).map((s) => (
-                <Chip key={s} label={cap(s)} active={sort === s} onPress={() => setSort(s)} />
-              ))}
-            </FilterRow>
+            <FlatList
+              horizontal
+              data={(['rating', 'price', 'distance'] as SortKey[])}
+              keyExtractor={(s) => s}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}
+              renderItem={({ item }) => (
+                <Chip label={item === 'rating' ? 'Top rated' : item === 'price' ? 'Lowest price' : 'Nearest'}
+                  active={sort === item} onPress={() => setSort(item)} />
+              )}
+            />
 
-            <FilterRow title="Crowd">
-              {CROWD_FILTERS.map((c) => (
-                <Chip
-                  key={c}
-                  label={c}
-                  active={crowd === c}
-                  onPress={() => setCrowd(crowd === c ? null : c)}
-                />
+            <View style={styles.filterChips}>
+              {CROWD.map((c) => (
+                <Chip key={c} label={`${c} crowd`} active={crowd === c} onPress={() => setCrowd(crowd === c ? null : c)} />
               ))}
-            </FilterRow>
-
-            <FilterRow title="Amenities">
-              {AMENITY_FILTERS.map((a) => (
-                <Chip
-                  key={a}
-                  label={a}
-                  active={amenity === a}
-                  onPress={() => setAmenity(amenity === a ? null : a)}
-                />
+              {AMENITIES.map((a) => (
+                <Chip key={a} label={a} active={amenity === a} onPress={() => setAmenity(amenity === a ? null : a)} />
               ))}
-            </FilterRow>
+            </View>
 
-            <Text style={styles.resultCount}>
-              {data.length} gym{data.length === 1 ? '' : 's'} within 5 km
-            </Text>
+            <AppText variant="h2" style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+              {loading ? 'Finding gyms…' : `${gyms.length} gym${gyms.length === 1 ? '' : 's'} near you`}
+            </AppText>
           </View>
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>No gyms match your filters. Try widening them.</Text>
+          loading ? (
+            <View style={{ gap: spacing.lg }}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonCard}>
+                  <Skeleton height={168} radius={0} />
+                  <View style={{ padding: spacing.lg, gap: 8 }}>
+                    <Skeleton height={18} width="70%" />
+                    <Skeleton height={13} width="45%" />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : error ? (
+            <EmptyState icon="cloud-offline-outline" title="Couldn't load gyms"
+              body={error} action="Try again" onAction={reload} />
+          ) : (
+            <EmptyState icon="search-outline" title="No gyms match"
+              body="Try widening your filters or searching a different area." />
+          )
         }
       />
     </View>
   );
 }
 
-function FilterRow({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.filterRow}>
-      <Text style={styles.filterTitle}>{title}</Text>
-      <View style={styles.chipWrap}>{children}</View>
-    </View>
-  );
-}
-
-function Chip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function cap(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+  container: { flex: 1, backgroundColor: colors.bgSubtle },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface,
+    borderRadius: radius.md, paddingHorizontal: spacing.md, marginTop: spacing.lg, ...shadow.sm,
   },
-  searchIcon: { fontSize: 16, marginRight: 8 },
-  searchInput: { flex: 1, color: colors.text, fontSize: font.body, paddingVertical: 12 },
-  filterRow: { marginBottom: spacing.sm },
-  filterTitle: {
-    color: colors.textMuted,
-    fontSize: font.tiny,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.textMuted, fontSize: font.small, fontWeight: '700' },
-  chipTextActive: { color: colors.bg },
-  resultCount: { color: colors.textMuted, fontSize: font.small, marginTop: spacing.sm },
-  empty: { color: colors.textMuted, textAlign: 'center', marginTop: spacing.xxl },
+  searchInput: { flex: 1, paddingVertical: 14, ...T.body, color: colors.text },
+  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  skeletonCard: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden', ...shadow.sm },
 });

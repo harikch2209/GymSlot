@@ -1,150 +1,123 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getEvent } from '@/data/events';
+import { fetchEvent } from '@/lib/api';
+import { useResource } from '@/hooks/useResource';
 import { useApp } from '@/context/AppContext';
-import { colors, font, radius, spacing } from '@/theme';
-import { Button, Card, Pill } from '@/components/ui';
+import { colors, radius, spacing } from '@/theme';
+import { AppText, Badge, Button, Card, Divider, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { inr } from '@/utils/format';
+
+const { width } = Dimensions.get('window');
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { createBooking, creditBalance } = useApp();
+  const { data: event, loading, error, reload } = useResource(() => fetchEvent(id), [id]);
   const [reserving, setReserving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const event = getEvent(id);
-  if (!event) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.muted}>Event not found.</Text>
-      </View>
-    );
+  if (loading) {
+    return <View style={styles.container}><Skeleton height={280} radius={0} />
+      <View style={{ padding: spacing.lg, gap: spacing.md }}><Skeleton height={24} width="60%" /><Skeleton height={120} /></View></View>;
+  }
+  if (error || !event) {
+    return <View style={[styles.container, { justifyContent: 'center' }]}>
+      <EmptyState icon="cloud-offline-outline" title="Event not available" action="Retry" onAction={reload} /></View>;
   }
 
   const free = event.price === 0;
   const spotsLeft = event.capacity - event.reserved;
 
-  const reserve = () => {
+  const reserve = async () => {
     setReserving(true);
-    setTimeout(() => {
-      // Paid events pay from credits first (PRD: credits usable on paid events).
+    setErr(null);
+    try {
+      await new Promise((r) => setTimeout(r, 600));
       const creditsUsed = free ? 0 : Math.min(creditBalance, event.price);
-      const booking = createBooking({
-        kind: 'event',
-        gymId: event.gymId,
-        gymName: event.gymName,
-        title: event.title,
-        date: event.date,
-        time: event.time,
-        durationMins: event.durationMins,
-        amountPaid: free ? 0 : event.price - creditsUsed,
-        creditsUsed,
+      const booking = await createBooking({
+        kind: 'event', gymId: event.gymId ?? '', gymName: event.gymName, title: event.title,
+        date: event.date, time: event.time, durationMins: event.durationMins,
+        amountPaid: free ? 0 : event.price - creditsUsed, creditsUsed, eventId: event.id,
       });
-      setReserving(false);
       router.replace(`/ticket/${booking.id}`);
-    }, 700);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not reserve.');
+      setReserving(false);
+    }
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}>
-        <View style={styles.banner}>
-          <Text style={styles.bannerEmoji}>{event.image}</Text>
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}>
+        <Image source={{ uri: event.imageUrl ?? undefined }} style={{ width, height: 280 }} contentFit="cover" transition={250} />
         <View style={styles.body}>
           <View style={styles.titleRow}>
-            <Text style={styles.title}>{event.title}</Text>
-            {free ? (
-              <Pill label="FREE" color={colors.bg} bg={colors.primary} />
-            ) : (
-              <Pill label={inr(event.price)} color={colors.bg} bg={colors.accent} />
-            )}
+            <AppText variant="h1" style={{ flex: 1 }}>{event.title}</AppText>
+            {free ? <Badge label="FREE" color="#fff" bg={colors.primary} /> : <Badge label={inr(event.price)} color="#fff" bg={colors.accent} />}
           </View>
-          <Text style={styles.meta}>
-            {event.gymName} · {event.category}
-          </Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={14} color={colors.textSubtle} />
+            <AppText variant="small" color={colors.textMuted}>{event.gymName} · {event.category}</AppText>
+          </View>
 
           <Card style={{ marginTop: spacing.lg }}>
-            <Info label="When" value={`${event.date} · ${event.time}`} />
-            <Info label="Duration" value={`${event.durationMins} min`} />
-            <Info label="Spots left" value={`${spotsLeft} of ${event.capacity}`} />
-            <Info label="What to bring" value={event.whatToBring} />
+            <Info icon="calendar-outline" label="When" value={`${event.date} · ${event.time}`} />
+            <Info icon="time-outline" label="Duration" value={`${event.durationMins} min`} />
+            <Info icon="people-outline" label="Spots left" value={`${spotsLeft} of ${event.capacity}`} />
+            <Info icon="bag-handle-outline" label="What to bring" value={event.whatToBring} />
           </Card>
 
-          <Text style={styles.descTitle}>About this event</Text>
-          <Text style={styles.desc}>{event.description}</Text>
+          <AppText variant="h3" style={{ marginTop: spacing.xl, marginBottom: spacing.sm }}>About this event</AppText>
+          <AppText variant="body" color={colors.textMuted} style={{ lineHeight: 23 }}>{event.description}</AppText>
 
           {free && (
-            <View style={styles.noteBox}>
-              <Text style={styles.noteText}>
-                Free reservation. Please show up — repeated no-shows can limit future free
-                reservations.
-              </Text>
+            <View style={styles.note}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <AppText variant="small" color={colors.textMuted} style={{ flex: 1 }}>
+                Free reservation. Please show up — repeated no-shows can limit future free reservations.
+              </AppText>
+            </View>
+          )}
+          {!!err && (
+            <View style={[styles.note, { backgroundColor: colors.dangerTint }]}>
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
+              <AppText variant="small" color={colors.danger} style={{ flex: 1 }}>{err}</AppText>
             </View>
           )}
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Button
-          title={free ? 'Reserve free spot' : `Reserve · ${inr(event.price)}`}
-          loading={reserving}
-          disabled={spotsLeft <= 0}
-          onPress={reserve}
-        />
+        <Button title={spotsLeft <= 0 ? 'Sold out' : free ? 'Reserve free spot' : `Reserve · ${inr(event.price)}`}
+          loading={reserving} disabled={spotsLeft <= 0} onPress={reserve} fullWidth icon={spotsLeft > 0 ? 'ticket-outline' : undefined} />
       </View>
     </View>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return (
     <View style={styles.info}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Ionicons name={icon} size={16} color={colors.textSubtle} />
+        <AppText variant="small" color={colors.textMuted}>{label}</AppText>
+      </View>
+      <AppText variant="smallStrong" style={{ flexShrink: 1, textAlign: 'right' }}>{value}</AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  muted: { color: colors.textMuted },
-  banner: {
-    height: 170,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerEmoji: { fontSize: 64 },
+  container: { flex: 1, backgroundColor: colors.bgSubtle },
   body: { padding: spacing.lg },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md },
-  title: { color: colors.text, fontSize: font.h2, fontWeight: '900', flex: 1 },
-  meta: { color: colors.textMuted, fontSize: font.small, marginTop: 4 },
-  info: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
-  infoLabel: { color: colors.textMuted, fontSize: font.small },
-  infoValue: { color: colors.text, fontSize: font.small, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
-  descTitle: { color: colors.text, fontSize: font.h3, fontWeight: '800', marginTop: spacing.xl, marginBottom: spacing.sm },
-  desc: { color: colors.textMuted, fontSize: font.body, lineHeight: 22 },
-  noteBox: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-  },
-  noteText: { color: colors.textMuted, fontSize: font.small, lineHeight: 20 },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  info: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: spacing.md },
+  note: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderRadius: radius.md },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg, paddingTop: spacing.md, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border },
 });

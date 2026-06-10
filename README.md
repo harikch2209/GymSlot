@@ -1,84 +1,95 @@
 # GymSlot 🏋️ — Pay-Per-Slot Gym Booking App
 
-A cross-platform **mobile app** (iOS / Android / Web) built with **Expo + React Native + TypeScript**, implementing the consumer side of the *GymSlot* Product Requirements Document — a three-sided pay-per-slot gym marketplace for the Indian market.
+A production-grade, cross-platform **mobile app** (iOS / Android / Web) built with
+**Expo + React Native + TypeScript**, backed by **Supabase** (auth + Postgres). GymSlot is a
+pay-per-slot gym marketplace for the Indian market — "turf booking, but for gyms" — with live
+crowd visibility, an on-demand trainer add-on, wallet credits, QR check-in, and gym events.
 
-> Think “turf booking, but for gyms” — with live crowd visibility, an on-demand trainer add-on, wallet credits, and gym-hosted events.
+> Pay only for the sessions you actually attend. See how crowded a gym is right now. Book a
+> 30 or 60-minute slot in under a minute.
 
-## Why
+## Highlights
 
-Gym-goers in India are forced into monthly/yearly memberships but often visit only a few times a month, wasting most of what they paid. GymSlot lets users **pay only for the sessions they actually attend**, see how crowded a gym is *right now*, and book a 30 or 60-minute slot in under a minute.
+- **Real backend** — Supabase Auth (email/password) + Postgres with Row Level Security. Every
+  user's bookings and wallet are isolated at the database level.
+- **Server-authoritative money** — bookings, credit spend, and refunds run in `SECURITY DEFINER`
+  Postgres functions, so amounts can't be forged from the client. See [`SECURITY.md`](SECURITY.md).
+- **Premium light UI** — a Cult.fit-inspired design system (emerald accent, Inter, real
+  photography, soft depth). Documented in [`DESIGN.md`](DESIGN.md).
+- **Accessible** — screen-reader labels, AA contrast, ≥44px targets. See [`ACCESSIBILITY.md`](ACCESSIBILITY.md).
+- **Store-ready** — generated app icons/splash, `app.json` + `eas.json` configured, store copy
+  and privacy answers written. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-## What's implemented (this prototype)
+## Features
 
-This is a runnable, self-contained **front-end prototype** with an in-memory data layer (no backend required) covering the PRD's P0 user-app surface:
+| Module | Feature |
+|---|---|
+| Auth | Email/password sign-up & sign-in, session persistence, ₹250 welcome credits |
+| Discover | Gym list with real photos, distance, price, rating, **live crowd**, search + filters |
+| Gym detail | Photo gallery, amenities, live slot availability |
+| Booking | Day + slot selection → optional **personal-trainer** add-on → checkout |
+| Checkout | UPI / Card / Net-banking (simulated), GST-inclusive pricing, **wallet credits** |
+| Check-in | **QR ticket** per booking + simulated gym check-in |
+| Wallet | Credit **ledger** with reasons, balance, **refund-to-credits +5% bonus** on cancel |
+| Events | Bootcamps, workshops, yoga — free (one-tap) & paid reservations with QR |
+| Profile | Stats, account, sign out |
 
-| PRD Module | Feature | Status |
-|---|---|---|
-| 1.1 Discovery | Location-style gym list with distance, price, rating, **live crowd indicator**, filters (sort / crowd / amenities) & search | ✅ |
-| 1.1 Detail | Gym detail page: photos, about, timings, amenities, **slot grid** with per-slot price & remaining capacity | ✅ |
-| 1.2 Booking | Day + slot selection → **optional personal-trainer add-on** (fee range, per-trainer selection) → checkout | ✅ |
-| 1.2 Payment | Checkout with **UPI / Card / Net banking**, GST-inclusive pricing, **wallet credits** applied partially | ✅ |
-| 1.3 Check-in | **QR ticket** per booking + simulated gym check-in (QR marked used after) | ✅ |
-| 2.1 Crowd | Crowd buckets (Low / Moderate / High / Full / Not available) with **"updated X min ago"** staleness | ✅ |
-| 4.2 Trainer | Trainer toggle, fee held messaging, assignment shown on ticket | ✅ |
-| 6 Notifications | Confirmation messaging (app + WhatsApp copy) | ✅ (UI) |
-| 7 Wallet | **Credit ledger** with reason codes, balance, **refund-to-credits +5% bonus** on cancellation | ✅ |
-| 8 Events | Events tab + detail, **free (one-tap) & paid reservations**, QR ticket, no-show note | ✅ |
-| 5 Trust | Booking status, cancellation policy, support entry points | ✅ (UI) |
+## Tech stack
 
-Out of scope for this prototype (per PRD non-goals / later phases): real payment gateway, backend/DB, gym-partner & trainer apps, push delivery, sensor-based crowd sensing.
-
-## Tech
-
-- **Expo SDK 52** with **Expo Router** (file-based navigation, typed routes)
+- **Expo SDK 52** + **Expo Router** (file-based, typed routes)
 - **React Native 0.76** + **TypeScript** (strict)
-- `react-native-qrcode-svg` for real QR ticket generation
-- React Context for wallet + bookings state
-- A single dark, energetic design system in `src/theme.ts`
+- **Supabase** — `@supabase/supabase-js`, Auth, Postgres, RLS, RPCs
+- `expo-image`, `expo-linear-gradient`, `@expo-google-fonts/inter`, `react-native-reanimated`,
+  `expo-haptics`, `react-native-qrcode-svg`
+
+## Run it locally
+
+```bash
+npm install
+cp .env.example .env     # fill EXPO_PUBLIC_SUPABASE_URL + ANON_KEY (already set for the team)
+npm start                # press i (iOS), a (Android), or w (web)
+npm run typecheck        # tsc --noEmit — the quality gate
+```
+
+The Supabase backend (project `gymslot`, ap-south-1) is already provisioned. To recreate it
+elsewhere, apply `supabase/migrations/*.sql` then `supabase/seed.sql` — see
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Project structure
 
 ```
 app/                      # Expo Router routes
-  _layout.tsx             # Root stack + providers
+  _layout.tsx             # Fonts, providers, auth-gated navigation
+  (auth)/                 # welcome · sign-in · sign-up
   (tabs)/                 # Discover · Events · Bookings · Wallet · Profile
-  gym/[id].tsx            # Gym detail + slot grid
-  book/[id].tsx           # Slot + trainer selection
-  checkout.tsx            # Credits + payment
-  event/[id].tsx          # Event detail + reserve
-  ticket/[id].tsx         # QR confirmation
+  gym/[id]  book/[id]  checkout  event/[id]  ticket/[id]
 src/
-  components/             # UI kit, GymCard, CrowdBadge, QRTicket
-  context/AppContext.tsx  # Bookings + credit wallet state
-  data/                   # Mock gyms, trainers, events
-  utils/                  # Formatting + crowd helpers
-  theme.ts, types.ts
+  lib/                    # supabase client, api (queries + RPCs), generated db types
+  context/                # AuthContext (session) · AppContext (bookings + wallet)
+  components/             # ui kit, GymCard, CrowdBadge, QRTicket
+  hooks/                  # useResource (async + pull-to-refresh)
+  theme.ts  types.ts  utils/
+supabase/
+  migrations/             # 0001 schema+RLS · 0002 functions · seed.sql
 ```
 
-## Run it
+## Documentation
 
-```bash
-npm install
-npm start          # then press i (iOS), a (Android), or w (web)
-# or directly:
-npm run web
-```
+- [`DESIGN.md`](DESIGN.md) — design system source of truth
+- [`SECURITY.md`](SECURITY.md) — security model & reporting
+- [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) — privacy policy
+- [`ACCESSIBILITY.md`](ACCESSIBILITY.md) — a11y status
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build & store submission
+- [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md) — listing copy + data-safety answers
+- [`CLAUDE.md`](CLAUDE.md) — architecture notes for contributors
 
-Type-check:
+## Scope notes
 
-```bash
-npm run typecheck
-```
-
-## Try this flow
-
-1. **Discover** → filter by crowd “Low” → open *IronCore Fitness*.
-2. Pick a slot → toggle **Add a personal trainer** → choose one → **Proceed to pay**.
-3. At **Checkout**, toggle **Use wallet credits** (₹250 welcome bonus) → pay with UPI.
-4. Get your **QR ticket** → tap **Simulate gym check-in**.
-5. Go to **Bookings** → cancel a confirmed one → choose **Instant credits +5%** → watch the **Wallet** ledger update.
-6. Open **Events** → reserve the free *Cardio Bootcamp* in one tap.
+Payments are **simulated** in this version (no real charge, no card/UPI/bank data collected) —
+the booking and wallet logic behind them is real and server-validated. Wiring a real gateway
+(e.g. Razorpay) is the one remaining integration for live transactions; the architecture leaves
+a clean seam for it (see `SECURITY.md` and `docs/DEPLOYMENT.md`).
 
 ---
 
-Built from the *Pay-Per-Slot Gym Booking App* PRD (v0.2).
+Built from the *Pay-Per-Slot Gym Booking App* PRD.

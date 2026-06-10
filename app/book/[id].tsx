@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getGym } from '@/data/gyms';
-import { TRAINERS, trainerFeeRange } from '@/data/trainers';
-import { colors, font, radius, spacing } from '@/theme';
-import { Button, Card, Pill, SectionTitle } from '@/components/ui';
-import { inr } from '@/utils/format';
+import { fetchGym, fetchSlotsWithAvailability, fetchTrainers } from '@/lib/api';
+import { useResource } from '@/hooks/useResource';
+import { AppText, Button, Card, EmptyState, Ionicons, Skeleton } from '@/components/ui';
+import { colors, radius, shadow, spacing } from '@/theme';
 import { Slot, Trainer } from '@/types';
+import { inr } from '@/utils/format';
 
 const DAYS = ['Today', 'Tomorrow', 'Wed', 'Thu'];
 
@@ -15,42 +16,46 @@ export default function BookScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const gym = getGym(id);
 
   const [day, setDay] = useState(0);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [wantTrainer, setWantTrainer] = useState(false);
   const [trainer, setTrainer] = useState<Trainer | null>(null);
 
-  const range = useMemo(
-    () => trainerFeeRange(slot?.duration ?? 60),
-    [slot?.duration],
-  );
+  const gymRes = useResource(() => fetchGym(id), [id]);
+  const slotsRes = useResource(() => fetchSlotsWithAvailability(id, DAYS[day]), [id, day]);
+  const trainersRes = useResource(fetchTrainers, []);
 
-  if (!gym) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.muted}>Gym not found.</Text>
-      </View>
-    );
-  }
+  const gym = gymRes.data;
+  const slots = slotsRes.data ?? [];
+  const trainers = trainersRes.data ?? [];
 
-  const trainerFee =
-    wantTrainer && trainer ? (slot?.duration === 30 ? trainer.fee30 : trainer.fee60) : 0;
+  const trainerFee = wantTrainer && trainer ? (slot?.duration === 30 ? trainer.fee30 : trainer.fee60) : 0;
   const total = (slot?.price ?? 0) + trainerFee;
+
+  const feeRange = useMemo(() => {
+    if (!trainers.length) return null;
+    const fees = trainers.map((t) => (slot?.duration === 30 ? t.fee30 : t.fee60));
+    return { min: Math.min(...fees), max: Math.max(...fees) };
+  }, [trainers, slot?.duration]);
+
+  if (gymRes.loading) {
+    return <View style={styles.container}><View style={{ padding: spacing.lg, gap: spacing.md }}>
+      <Skeleton height={24} width="55%" /><Skeleton height={90} /><Skeleton height={160} /></View></View>;
+  }
+  if (!gym) {
+    return <View style={[styles.container, { justifyContent: 'center' }]}>
+      <EmptyState icon="cloud-offline-outline" title="Gym not available" action="Retry" onAction={gymRes.reload} /></View>;
+  }
 
   const proceed = () => {
     if (!slot) return;
     router.push({
       pathname: '/checkout',
       params: {
-        gymId: gym.id,
-        gymName: gym.name,
-        slotLabel: `${slot.time} · ${slot.duration} min`,
-        day: DAYS[day],
-        time: slot.time,
-        duration: String(slot.duration),
-        slotPrice: String(slot.price),
+        gymId: gym.id, gymName: gym.name, gymImage: gym.imageUrl ?? '',
+        slotId: slot.id, slotLabel: `${slot.time} · ${slot.duration} min`,
+        day: DAYS[day], time: slot.time, duration: String(slot.duration), slotPrice: String(slot.price),
         trainerId: wantTrainer && trainer ? trainer.id : '',
         trainerName: wantTrainer && trainer ? trainer.name : '',
         trainerFee: String(trainerFee),
@@ -60,94 +65,80 @@ export default function BookScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 130 }}>
-        <Text style={styles.gymName}>{gym.name}</Text>
-        <Text style={styles.muted}>{gym.area}</Text>
+      <ScrollView showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 130 }}>
+        <View style={styles.gymRow}>
+          <Image source={{ uri: gym.imageUrl ?? undefined }} style={styles.thumb} contentFit="cover" />
+          <View style={{ flex: 1 }}>
+            <AppText variant="h3">{gym.name}</AppText>
+            <AppText variant="small" color={colors.textMuted}>{gym.area}</AppText>
+          </View>
+        </View>
 
-        <SectionTitle style={{ marginTop: spacing.lg }}>Select day</SectionTitle>
+        <AppText variant="h3" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Select day</AppText>
         <View style={styles.dayRow}>
           {DAYS.map((d, i) => (
-            <Pressable
-              key={d}
-              onPress={() => setDay(i)}
-              style={[styles.dayChip, day === i && styles.dayChipActive]}
-            >
-              <Text style={[styles.dayChipText, day === i && styles.dayChipTextActive]}>{d}</Text>
+            <Pressable key={d} onPress={() => { setDay(i); setSlot(null); }}
+              accessibilityRole="button" accessibilityState={{ selected: day === i }}
+              style={[styles.dayChip, day === i && styles.dayChipActive]}>
+              <AppText variant="smallStrong" color={day === i ? colors.onPrimary : colors.textMuted}>{d}</AppText>
             </Pressable>
           ))}
         </View>
 
-        <SectionTitle style={{ marginTop: spacing.xl }}>Select slot</SectionTitle>
+        <View style={styles.slotHeader}>
+          <AppText variant="h3">Select slot</AppText>
+          {slotsRes.loading && <AppText variant="small" color={colors.textSubtle}>Checking availability…</AppText>}
+        </View>
         <View style={styles.slotGrid}>
-          {gym.slots.map((s) => {
-            const remaining = s.capacity - s.booked;
-            const full = remaining <= 0;
+          {slots.map((s) => {
+            const full = s.remaining <= 0;
             const selected = slot?.id === s.id;
             return (
-              <Pressable
-                key={s.id}
-                disabled={full}
-                onPress={() => setSlot(s)}
-                style={[
-                  styles.slot,
-                  full && styles.slotFull,
-                  selected && styles.slotSelected,
-                ]}
-              >
-                <Text style={[styles.slotTime, selected && { color: colors.bg }]}>{s.time}</Text>
-                <Text style={[styles.slotDur, selected && { color: colors.bg }]}>
-                  {s.duration} min
-                </Text>
-                <Text style={[styles.slotPrice, selected && { color: colors.bg }]}>
-                  {inr(s.price)}
-                </Text>
-                <Text style={[styles.slotCap, selected && { color: colors.bg }, full && { color: colors.danger }]}>
-                  {full ? 'Full' : `${remaining} left`}
-                </Text>
+              <Pressable key={s.id} disabled={full} onPress={() => setSlot(s)}
+                accessibilityRole="button"
+                accessibilityLabel={`${s.time}, ${s.duration} minutes, ${inr(s.price)}, ${full ? 'full' : `${s.remaining} spots left`}`}
+                accessibilityState={{ selected, disabled: full }}
+                style={[styles.slot, full && styles.slotFull, selected && styles.slotSelected]}>
+                <AppText variant="bodyStrong" color={selected ? colors.onPrimary : colors.text}>{s.time}</AppText>
+                <AppText variant="tiny" color={selected ? 'rgba(255,255,255,0.85)' : colors.textSubtle}>{s.duration} MIN</AppText>
+                <AppText variant="smallStrong" color={selected ? colors.onPrimary : colors.primary} style={{ marginTop: 2 }}>{inr(s.price)}</AppText>
+                <AppText variant="tiny" color={selected ? 'rgba(255,255,255,0.85)' : full ? colors.danger : colors.textSubtle}>
+                  {full ? 'Full' : `${s.remaining} left`}
+                </AppText>
               </Pressable>
             );
           })}
         </View>
 
-        <SectionTitle style={{ marginTop: spacing.xl }}>Add a personal trainer?</SectionTitle>
+        <AppText variant="h3" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Add a personal trainer?</AppText>
         <Card>
-          <View style={styles.trainerToggle}>
+          <View style={styles.toggleRow}>
             <View style={{ flex: 1, paddingRight: spacing.md }}>
-              <Text style={styles.trainerToggleTitle}>Guided session</Text>
-              <Text style={styles.muted}>
-                Fee range {inr(range.min)}–{inr(range.max)}. Charged only when a trainer accepts.
-              </Text>
+              <AppText variant="bodyStrong">Guided session</AppText>
+              <AppText variant="small" color={colors.textMuted} style={{ marginTop: 2 }}>
+                {feeRange ? `Fee ${inr(feeRange.min)}–${inr(feeRange.max)}. ` : ''}Charged only when a trainer accepts.
+              </AppText>
             </View>
-            <Switch
-              value={wantTrainer}
-              onValueChange={(v) => {
-                setWantTrainer(v);
-                if (!v) setTrainer(null);
-              }}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.text}
-            />
+            <Switch value={wantTrainer} onValueChange={(v) => { setWantTrainer(v); if (!v) setTrainer(null); }}
+              trackColor={{ true: colors.primary, false: colors.borderStrong }} thumbColor="#fff" />
           </View>
 
           {wantTrainer && (
             <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-              {TRAINERS.map((t) => {
+              {trainers.map((t) => {
                 const fee = slot?.duration === 30 ? t.fee30 : t.fee60;
                 const selected = trainer?.id === t.id;
                 return (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => setTrainer(t)}
-                    style={[styles.trainerCard, selected && styles.trainerCardActive]}
-                  >
-                    <Text style={styles.trainerAvatar}>{t.avatar}</Text>
+                  <Pressable key={t.id} onPress={() => setTrainer(t)}
+                    accessibilityRole="button" accessibilityState={{ selected }}
+                    style={[styles.trainerCard, selected && styles.trainerCardActive]}>
+                    <Image source={{ uri: t.avatarUrl ?? undefined }} style={styles.trainerAvatar} contentFit="cover" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.trainerName}>{t.name}</Text>
-                      <Text style={styles.muted}>
-                        ★ {t.rating} · {t.experienceYears}y · {t.specializations.join(', ')}
-                      </Text>
+                      <AppText variant="smallStrong">{t.name}</AppText>
+                      <AppText variant="small" color={colors.textMuted}>★ {t.rating} · {t.experienceYears}y · {t.specializations.join(', ')}</AppText>
                     </View>
-                    <Text style={styles.trainerFee}>{inr(fee)}</Text>
+                    <AppText variant="bodyStrong" color={colors.primary}>{inr(fee)}</AppText>
                   </Pressable>
                 );
               })}
@@ -158,82 +149,31 @@ export default function BookScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <View>
-          <Text style={styles.muted}>Total</Text>
-          <Text style={styles.total}>{inr(total)}</Text>
+          <AppText variant="tiny" color={colors.textSubtle}>TOTAL</AppText>
+          <AppText variant="h2">{inr(total)}</AppText>
         </View>
-        <Button
-          title={slot ? 'Proceed to pay' : 'Select a slot'}
-          disabled={!slot || (wantTrainer && !trainer)}
-          onPress={proceed}
-          style={{ flex: 1, marginLeft: spacing.lg }}
-        />
+        <Button title={slot ? 'Proceed to pay' : 'Select a slot'} disabled={!slot || (wantTrainer && !trainer)}
+          onPress={proceed} style={{ flex: 1, marginLeft: spacing.lg }} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  muted: { color: colors.textMuted, fontSize: font.small },
-  gymName: { color: colors.text, fontSize: font.h2, fontWeight: '900' },
+  container: { flex: 1, backgroundColor: colors.bgSubtle },
+  gymRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  thumb: { width: 54, height: 54, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
   dayRow: { flexDirection: 'row', gap: spacing.sm },
-  dayChip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  dayChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayChipText: { color: colors.textMuted, fontWeight: '700', fontSize: font.small },
-  dayChipTextActive: { color: colors.bg },
+  dayChip: { paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  dayChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  slotHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.md },
   slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  slot: {
-    width: '31%',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: 2,
-  },
-  slotFull: { opacity: 0.4 },
+  slot: { width: '31.5%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', gap: 1, ...shadow.sm },
+  slotFull: { opacity: 0.4, backgroundColor: colors.surfaceSunken },
   slotSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  slotTime: { color: colors.text, fontSize: font.body, fontWeight: '800' },
-  slotDur: { color: colors.textMuted, fontSize: font.tiny },
-  slotPrice: { color: colors.primary, fontSize: font.small, fontWeight: '800', marginTop: 2 },
-  slotCap: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
-  trainerToggle: { flexDirection: 'row', alignItems: 'center' },
-  trainerToggleTitle: { color: colors.text, fontSize: font.body, fontWeight: '800', marginBottom: 2 },
-  trainerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  trainerCardActive: { borderColor: colors.primary },
-  trainerAvatar: { fontSize: 32 },
-  trainerName: { color: colors.text, fontSize: font.body, fontWeight: '800' },
-  trainerFee: { color: colors.primary, fontSize: font.body, fontWeight: '800' },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  total: { color: colors.text, fontSize: font.h2, fontWeight: '900' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center' },
+  trainerCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surfaceAlt, borderWidth: 1.5, borderColor: 'transparent', borderRadius: radius.md, padding: spacing.sm, paddingRight: spacing.md },
+  trainerCardActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  trainerAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.surfaceSunken },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', padding: spacing.lg, paddingTop: spacing.md, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border },
 });

@@ -1,88 +1,82 @@
 import React from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { colors, font, radius, spacing } from '@/theme';
+import { colors, radius, shadow, spacing } from '@/theme';
+import { AppText, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { inr } from '@/utils/format';
-import { CreditEntry } from '@/types';
+import { CreditEntry, CreditReason } from '@/types';
 
-const REASON_EMOJI: Record<string, string> = {
-  refund: '↩️',
-  'cancellation-bonus': '🎁',
-  promo: '✨',
-  goodwill: '💚',
-  spend: '🛒',
+const REASON: Record<CreditReason, { icon: keyof typeof Ionicons.glyphMap; tint: string }> = {
+  refund: { icon: 'arrow-undo-outline', tint: colors.accent },
+  'cancellation-bonus': { icon: 'gift-outline', tint: colors.primary },
+  promo: { icon: 'sparkles-outline', tint: colors.warning },
+  goodwill: { icon: 'heart-outline', tint: colors.crowdHigh },
+  spend: { icon: 'cart-outline', tint: colors.textMuted },
 };
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
-  const { creditBalance, ledger } = useApp();
+  const { creditBalance, ledger, loading, refreshing, refresh } = useApp();
 
   return (
     <View style={styles.container}>
       <FlatList
         data={ledger}
         keyExtractor={(e) => e.id}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
         ListHeaderComponent={
           <View>
-            <View style={styles.balanceCard}>
-              <Text style={styles.balanceLabel}>Available credits</Text>
-              <Text style={styles.balanceValue}>{inr(creditBalance)}</Text>
-              <Text style={styles.balanceHint}>
+            <LinearGradient colors={[colors.ink, '#1C2330']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.balanceCard}>
+              <View style={styles.balanceTop}>
+                <AppText variant="smallStrong" color="rgba(255,255,255,0.7)">AVAILABLE CREDITS</AppText>
+                <Ionicons name="wallet" size={20} color={colors.primary} />
+              </View>
+              <AppText variant="display" color="#fff" style={{ fontSize: 42, marginTop: 6 }}>{inr(creditBalance)}</AppText>
+              <AppText variant="small" color="rgba(255,255,255,0.65)" style={{ marginTop: 6 }}>
                 Usable on any gym slot, trainer session, or paid event.
-              </Text>
-            </View>
-            <Text style={styles.ledgerTitle}>Transaction history</Text>
+              </AppText>
+            </LinearGradient>
+            <AppText variant="h3" style={{ marginBottom: spacing.sm }}>Transaction history</AppText>
           </View>
         }
         renderItem={({ item }: { item: CreditEntry }) => {
           const credit = item.amount >= 0;
+          const meta = REASON[item.reason];
           return (
             <View style={styles.entry}>
-              <Text style={styles.entryEmoji}>{REASON_EMOJI[item.reason] ?? '•'}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.entryLabel}>{item.label}</Text>
-                <Text style={styles.entryDate}>
-                  {new Date(item.at).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </Text>
+              <View style={[styles.entryIcon, { backgroundColor: `${meta.tint}1A` }]}>
+                <Ionicons name={meta.icon} size={18} color={meta.tint} />
               </View>
-              <Text style={[styles.entryAmount, { color: credit ? colors.primary : colors.danger }]}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="smallStrong" numberOfLines={1}>{item.label}</AppText>
+                <AppText variant="tiny" color={colors.textSubtle}>
+                  {new Date(item.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </AppText>
+              </View>
+              <AppText variant="bodyStrong" color={credit ? colors.primary : colors.text}>
                 {credit ? '+' : '−'} {inr(Math.abs(item.amount))}
-              </Text>
+              </AppText>
             </View>
           );
         }}
+        ListEmptyComponent={
+          loading
+            ? <View style={{ gap: spacing.md }}>{[0, 1, 2].map((i) => <Skeleton key={i} height={56} radius={radius.md} />)}</View>
+            : <EmptyState icon="receipt-outline" title="No transactions yet" body="Your credit history will appear here as you book and earn." />
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  balanceCard: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.xl,
-  },
-  balanceLabel: { color: colors.bg, fontSize: font.small, fontWeight: '700', opacity: 0.8 },
-  balanceValue: { color: colors.bg, fontSize: 40, fontWeight: '900', marginTop: 4 },
-  balanceHint: { color: colors.bg, fontSize: font.small, opacity: 0.8, marginTop: spacing.sm },
-  ledgerTitle: { color: colors.text, fontSize: font.h3, fontWeight: '800', marginBottom: spacing.md },
-  entry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  entryEmoji: { fontSize: 22 },
-  entryLabel: { color: colors.text, fontSize: font.body, fontWeight: '600' },
-  entryDate: { color: colors.textMuted, fontSize: font.tiny, marginTop: 2 },
-  entryAmount: { fontSize: font.body, fontWeight: '900' },
+  container: { flex: 1, backgroundColor: colors.bgSubtle },
+  balanceCard: { borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.xl, ...shadow.md },
+  balanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  entry: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.sm },
+  entryIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

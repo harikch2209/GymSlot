@@ -26,5 +26,13 @@ yarn-error.*
 # macOS
 .DS_Store
 
-# env
+# env (anon key is RLS-protected & safe to expose, but keep local env out of git)
+.env
 .env*.local
+
+# EAS / native build output
+ios/
+android/
+*.ipa
+*.aab
+*.apk

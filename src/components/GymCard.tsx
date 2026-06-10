@@ -1,34 +1,61 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, spacing } from '@/theme';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, radius, shadow, spacing, type as T } from '@/theme';
 import { Gym } from '@/types';
 import { inr } from '@/utils/format';
+import { AppText, Ionicons, Stars } from './ui';
 import { CrowdBadge } from './CrowdBadge';
+
+const BLUR = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
 export function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${gym.name} in ${gym.area}, rated ${gym.rating} out of 5, from ${inr(gym.priceFrom)} per slot`}
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.96, transform: [{ scale: 0.992 }] }]}
     >
-      <View style={styles.banner}>
-        <Text style={styles.emoji}>{gym.image}</Text>
-      </View>
-      <View style={styles.body}>
-        <View style={styles.headerRow}>
-          <Text style={styles.name} numberOfLines={1}>
-            {gym.name}
-          </Text>
-          <Text style={styles.rating}>★ {gym.rating.toFixed(1)}</Text>
+      <View>
+        <Image
+          source={{ uri: gym.imageUrl ?? undefined }}
+          placeholder={BLUR}
+          transition={250}
+          contentFit="cover"
+          style={styles.image}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(14,17,22,0.0)', 'rgba(14,17,22,0.55)']}
+          style={styles.scrim}
+        />
+        <View style={styles.crowdOverlay}>
+          <CrowdBadge level={gym.crowd} onLight />
         </View>
-        <Text style={styles.meta}>
-          {gym.area} · {gym.distanceKm} km away
-        </Text>
-        <View style={styles.footerRow}>
-          <CrowdBadge level={gym.crowd} />
-          <Text style={styles.price}>
-            from <Text style={styles.priceValue}>{inr(gym.priceFrom)}</Text>/slot
-          </Text>
+        <View style={styles.priceOverlay}>
+          <AppText variant="tiny" color={colors.textMuted}>FROM</AppText>
+          <AppText variant="h3" color={colors.text}>{inr(gym.priceFrom)}</AppText>
+        </View>
+      </View>
+
+      <View style={styles.body}>
+        <View style={styles.titleRow}>
+          <AppText variant="h3" style={{ flex: 1 }} numberOfLines={1}>{gym.name}</AppText>
+          <Stars rating={gym.rating} reviews={gym.reviews} />
+        </View>
+        <View style={styles.metaRow}>
+          <Ionicons name="location-outline" size={14} color={colors.textSubtle} />
+          <AppText variant="small" color={colors.textMuted}>
+            {gym.area}{gym.distanceKm != null ? ` · ${gym.distanceKm} km` : ''}
+          </AppText>
+        </View>
+        <View style={styles.amenityRow}>
+          {gym.amenities.slice(0, 4).map((a) => (
+            <View key={a} style={styles.amenityTag}>
+              <AppText variant="tiny" color={colors.textMuted}>{a}</AppText>
+            </View>
+          ))}
         </View>
       </View>
     </Pressable>
@@ -36,32 +63,17 @@ export function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.lg, overflow: 'hidden', ...shadow.sm },
+  image: { width: '100%', height: 168, backgroundColor: colors.surfaceSunken },
+  scrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90 },
+  crowdOverlay: { position: 'absolute', top: spacing.md, left: spacing.md },
+  priceOverlay: {
+    position: 'absolute', bottom: spacing.md, right: spacing.md, alignItems: 'flex-end',
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 4,
   },
-  banner: {
-    height: 96,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emoji: { fontSize: 48 },
-  body: { padding: spacing.lg, gap: 6 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { color: colors.text, fontSize: font.h3, fontWeight: '800', flex: 1, marginRight: 8 },
-  rating: { color: colors.warning, fontSize: font.small, fontWeight: '800' },
-  meta: { color: colors.textMuted, fontSize: font.small },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  price: { color: colors.textMuted, fontSize: font.small },
-  priceValue: { color: colors.text, fontWeight: '800', fontSize: font.body },
+  body: { padding: spacing.lg, gap: 7 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  amenityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  amenityTag: { backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
 });

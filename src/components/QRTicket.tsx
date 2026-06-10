@@ -1,26 +1,26 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { colors, font, radius, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
+import { AppText, Ionicons } from './ui';
 
 export function QRTicket({
-  payload,
-  caption,
-  checkedIn,
-}: {
-  payload: string;
-  caption?: string;
-  checkedIn?: boolean;
-}) {
+  payload, caption, checkedIn,
+}: { payload: string; caption?: string; checkedIn?: boolean }) {
   return (
     <View style={styles.wrap}>
-      <View style={styles.qrBox}>
-        <QRCode value={payload} size={188} backgroundColor="#FFFFFF" color="#0B0F19" />
+      <View style={[styles.qrBox, checkedIn && { opacity: 0.35 }]}>
+        <QRCode value={payload} size={196} backgroundColor="#FFFFFF" color={colors.ink} />
       </View>
       {checkedIn ? (
-        <Text style={styles.used}>✓ Checked in — QR used</Text>
+        <View style={styles.usedRow}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+          <AppText variant="bodyStrong" color={colors.primary}>Checked in — QR used</AppText>
+        </View>
       ) : (
-        <Text style={styles.caption}>{caption ?? 'Show this QR at the gym entrance'}</Text>
+        <AppText variant="small" color={colors.textMuted} style={{ textAlign: 'center' }}>
+          {caption ?? 'Show this QR at the gym entrance'}
+        </AppText>
       )}
     </View>
   );
@@ -28,11 +28,6 @@ export function QRTicket({
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: spacing.md },
-  qrBox: {
-    backgroundColor: '#FFFFFF',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-  },
-  caption: { color: colors.textMuted, fontSize: font.small, textAlign: 'center' },
-  used: { color: colors.primary, fontSize: font.body, fontWeight: '800' },
+  qrBox: { backgroundColor: '#FFFFFF', padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  usedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });
