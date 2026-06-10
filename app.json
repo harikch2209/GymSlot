@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "GymSlot",
+    "slug": "gymslot-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "gymslot",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F19"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gymslot.mobile"
+    },
+    "android": {
+      "package": "com.gymslot.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0F19"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
