@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -23,6 +24,14 @@ const stackScreenOptions = {
   contentStyle: { backgroundColor: colors.bgSubtle },
 } as const;
 
+function Loading() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
+      <ActivityIndicator color={colors.primary} size="large" />
+    </View>
+  );
+}
+
 /** Redirects between the auth flow and the app depending on session state. */
 function RootNavigator() {
   const { session, initializing } = useAuth();
@@ -31,11 +40,13 @@ function RootNavigator() {
 
   useEffect(() => {
     if (initializing) return;
-    SplashScreen.hideAsync().catch(() => {});
     const inAuthGroup = segments[0] === '(auth)';
     if (!session && !inAuthGroup) router.replace('/(auth)/welcome');
     else if (session && inAuthGroup) router.replace('/(tabs)');
   }, [session, initializing, segments]);
+
+  // Don't render protected routes until we know the session.
+  if (initializing) return <Loading />;
 
   return (
     <Stack screenOptions={stackScreenOptions}>
@@ -54,12 +65,27 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
     Inter_700Bold, Inter_800ExtraBold, Inter_900Black,
   });
+  const [ready, setReady] = useState(false);
 
-  if (!fontsLoaded) return null;
+  // Proceed as soon as fonts resolve (loaded OR errored). A safety timeout
+  // guarantees we never hang on the splash screen if font loading stalls —
+  // text just falls back to the system font.
+  useEffect(() => {
+    if (fontsLoaded || fontError) setReady(true);
+  }, [fontsLoaded, fontError]);
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

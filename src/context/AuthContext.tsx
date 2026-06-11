@@ -20,16 +20,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setInitializing(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    let settled = false;
+    const settle = (s: Session | null) => {
+      if (!mounted || settled) return;
+      settled = true;
       setSession(s);
+      setInitializing(false);
+    };
+    supabase.auth.getSession()
+      .then(({ data }) => settle(data.session))
+      .catch(() => settle(null));
+    // Safety net: never leave the app stuck on a loading screen if getSession stalls.
+    const timer = setTimeout(() => settle(null), 8000);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (mounted) setSession(s);
     });
     return () => {
       mounted = false;
+      clearTimeout(timer);
       sub.subscription.unsubscribe();
     };
   }, []);
