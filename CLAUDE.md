@@ -58,6 +58,34 @@ URL **string** params; checkout coerces them and calls `createBooking` (the RPC)
 `Badge`, `Avatar`, `EmptyState`, `Skeleton`, …) — use these, not raw RN `Text`/`Pressable`. Icons
 are **Ionicons** (`@expo/vector-icons`), not emoji. Images use **expo-image** with remote URLs.
 
+## Marketplace features
+
+**Map + location (`app/map.tsx`, `src/hooks/useLocation.ts`, `src/utils/geo.ts`).** `react-native-maps`
+with gym price-pins; `expo-location` gives GPS with a city-centre fallback when denied. Distances are
+computed client-side (haversine) and injected into the gym list in Discover — `Gym.distanceKm` is null
+from the API and filled per-render. Works in Expo Go and iOS (Apple Maps); a standalone Android build
+needs a Google Maps key (`app.json` placeholder).
+
+**Reviews (`src/components/ReviewsSection.tsx`).** `reviews` table is world-readable; writes go only
+through the `submit_review` RPC, which **requires the caller to have a booking at that gym** and upserts
+(one review per user/gym). The gym's headline rating stays seeded; the reviews list is real.
+
+**Live crowd.** The `checkin` RPC nudges the gym one bucket busier and stamps `crowd_updated_at`, so the
+crowd indicator reflects real activity. Don't recompute crowd on the client.
+
+**Partner side (`app/partner/`).** `gym_owners` records ownership; a partner RLS policy lets owners read
+bookings for gyms they own (users still read only their own). `claim_gym` (demo onboarding) and
+`partner_checkin` (ownership-checked) are RPCs. `bookings.member_name` is denormalised at creation so
+partners see who's arriving without reading private profiles. Earnings use `COMMISSION_RATE` (15%) in
+`api.ts`.
+
+**Payments (`supabase/functions/`, `src/components/RazorpayCheckout.tsx`).** Razorpay, never client-trusted:
+`create-payment-order` computes the payable **server-side from the catalog** and creates the order;
+`verify-payment` checks the HMAC signature, then creates the booking via the user-scoped `create_booking`
+RPC and records the commission/payout split in `payments`. The client only opens Razorpay Checkout in a
+WebView and relays the result. The **Key Secret lives only in the Edge Function secret `RAZORPAY_KEY_SECRET`**
+— never add it to the app or repo. Full-credit bookings (payable 0) skip Razorpay and book directly.
+
 ## Conventions
 
 - Import from `src/` via the `@/*` alias (`@/lib/api`, `@/theme`, `@/context/AppContext`).

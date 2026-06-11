@@ -20,17 +20,21 @@ The data controller is the GymSlot operator. Contact: **harikch97@gmail.com**.
 | **Bookings** (gym, slot, date, amount, trainer) | To show and manage your bookings and check-ins | Supabase (`bookings`) |
 | **Wallet/credit ledger** | To track credits earned and spent | Supabase (`credit_ledger`) |
 | **Session token** | To keep you signed in | On your device (encrypted at rest by the OS keystore via the app's secure storage) |
+| **Approximate location** (only with your permission) | To show gyms near you and distances, and your position on the map | Used on-device in the moment; **not stored** on our servers, never tracked or shared |
+| **Camera** (gym partners only, with permission) | To scan a member's QR ticket to check them in | Processed on-device to read the QR; **no images are stored or uploaded** |
+| **Payment metadata** (Razorpay order/payment IDs, amount) | To confirm a booking was paid and record the gym's payout | Supabase (`payments`). **We never receive or store your card/UPI/bank details** — Razorpay handles those |
 
-We do **not** collect precise GPS location, contacts, photos, health/biometric data,
-advertising identifiers, or device microphone/camera data. The "Bengaluru" location shown
-in the App is a static label in this version, not your real location.
+Location is **approximate and optional** — if you decline the permission, the app falls back to a
+city-centre and still works. We do **not** collect contacts, photos, health/biometric data,
+advertising identifiers, microphone data, or background location. The camera is used only by gym
+partners to read a check-in QR, on-device; no photos are captured or uploaded.
 
 ## What we do not do
 
 - We do **not** sell or rent your personal data.
 - We do **not** use third-party advertising or analytics SDKs in this version.
-- We do **not** process real payments in this version. Checkout is simulated; no card,
-  UPI, or bank details are collected or transmitted.
+- We do **not** collect, see, or store your card, UPI, or bank details. Payments are processed by
+  **Razorpay**; you enter payment details directly into Razorpay's secure checkout, not into GymSlot.
 
 ## How data is used
 
@@ -40,10 +44,15 @@ secure backend so amounts can't be tampered with from the client.
 
 ## Sharing & sub-processors
 
-We use **Supabase** (database, authentication, hosting) as a sub-processor. Data is stored
-in Supabase's Mumbai (ap-south-1) region. Gym/trainer/event images are loaded from
-**Unsplash** image URLs; loading an image shares your IP address with that CDN, as with any
-web image. We share data with authorities only if legally required.
+We use the following sub-processors:
+- **Supabase** (database, authentication, Edge Functions, hosting) — data stored in the Mumbai
+  (ap-south-1) region.
+- **Razorpay** (payment processing) — when you pay, your payment details and amount are processed by
+  Razorpay under their privacy policy. We receive only a payment confirmation and IDs.
+- **Unsplash** (gym/trainer/event imagery) — loading an image shares your IP with that CDN, as with
+  any web image.
+
+We share data with authorities only if legally required.
 
 ## Data retention
 

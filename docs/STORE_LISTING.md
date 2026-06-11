@@ -66,17 +66,22 @@ Data types collected:
 | Email address | Yes | Account management, app functionality | Required |
 | Name | Yes | App functionality (personalisation) | Required |
 | Purchase/booking history (app activity) | Yes | App functionality | Required |
+| Approximate location | Yes (in-session, not stored) | App functionality (nearby gyms, distance) | **Optional** |
 
-- **No** precise/approximate location, financial info (no real payments), photos, contacts,
-  health data, or device IDs collected.
+- **Financial info (cards/UPI/bank):** **not collected by us** — processed by Razorpay in their
+  checkout. We store only payment confirmation IDs and amounts.
+- **Camera:** used by gym partners to scan a check-in QR on-device; **no photos collected**.
+- **No** precise/background location, photos, contacts, health data, or device IDs collected.
 - **No** advertising or third-party analytics SDKs.
+- **Third-party sharing:** none for advertising; payment data is processed by Razorpay (a processor).
 
 ## Apple App Privacy ("nutrition label")
 
 - **Data used to track you:** None.
 - **Data linked to you:** Contact Info (Email Address, Name) and User Content / Other
   (booking history) — used for **App Functionality** only.
-- **Data not linked to you:** None.
+- **Data not linked to you:** Coarse Location (used in-session for nearby gyms; not stored).
+- **Payments:** card/UPI/bank details are entered into Razorpay's checkout, not collected by the app.
 - No third-party advertising, no analytics SDKs.
 - `ITSAppUsesNonExemptEncryption = false` (only standard HTTPS/TLS is used) — set in `app.json`.
 
@@ -85,6 +90,8 @@ Data types collected:
 - Apple age rating: 4+.
 
 ## Notes for reviewers
-Payments are simulated in this build (no real charge, no card/UPI/bank data collected). A
-test account can be created in-app via email sign-up; reviewers may also be given a seeded
-test login on request.
+Create a test account in-app via email sign-up (you get ₹250 welcome credits). Payments use
+**Razorpay in test mode** — on the payment screen use test card `4111 1111 1111 1111`, any future
+expiry/CVV, then choose **Success** (or test UPI `success@razorpay`). No real charge occurs.
+Location is optional (decline and the app still works). The "Partner" area (Profile → List your gym)
+lets you claim a demo gym to view its bookings and scan check-ins.

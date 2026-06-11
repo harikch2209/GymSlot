@@ -13,10 +13,13 @@ security reports. We aim to acknowledge within 72 hours.
 Supabase; the app never sees or stores a plaintext password. Sessions are JWTs with
 automatic refresh, persisted on-device and refreshed only while the app is foregrounded.
 
-**Row Level Security (RLS).** Every table has RLS enabled (`supabase/migrations/0001_schema.sql`):
-- Catalog tables (`gyms`, `slots`, `trainers`, `events`) are read-only to clients.
-- `profiles`, `bookings`, `credit_ledger` are restricted to `auth.uid() = user_id`. A user
-  can never read or write another user's rows, even with a valid anon key.
+**Row Level Security (RLS).** Every table has RLS enabled:
+- Catalog tables (`gyms`, `slots`, `trainers`, `events`) and `reviews` are read-only to clients.
+- `profiles`, `bookings`, `credit_ledger`, `payments` are restricted to `auth.uid() = user_id`. A
+  user can never read or write another user's rows, even with a valid anon key.
+- **Partner access:** a gym owner (`gym_owners`) can read bookings for gyms they own via a dedicated
+  policy — but only those, and reads only. `member_name` is denormalised onto bookings so partners
+  never read other users' `profiles`.
 
 **Server-authoritative money logic.** Clients cannot write `bookings` or `credit_ledger`
 directly. All mutations go through `SECURITY DEFINER` RPCs (`0002_functions.sql`):
@@ -33,10 +36,18 @@ payment credentials exist in the app or repo.
 
 **Transport.** All traffic to Supabase is HTTPS/TLS.
 
-**Payments.** Payments are simulated in this version; no PAN, UPI VPA, or bank data is
-collected, stored, or transmitted, so PCI scope is zero. Wiring a real gateway (e.g.
-Razorpay) must keep card data off our servers (use the gateway's tokenised SDK) and verify
-payment server-side before confirming a booking — see `docs/DEPLOYMENT.md`.
+**Payments (Razorpay).** Handled by two Supabase Edge Functions (`supabase/functions/`):
+- `create-payment-order` computes the payable amount **server-side from the catalog** (the client
+  cannot set its own price) and creates the Razorpay order.
+- `verify-payment` verifies the Razorpay **HMAC-SHA256 signature** (`order_id|payment_id`) before
+  creating the booking. A forged or replayed signature is rejected and the payment marked failed.
+- **No card / UPI / bank data touches our servers or DB** — Razorpay's hosted checkout collects it.
+  We store only the order/payment IDs and amounts (`payments` table), so PCI scope is minimal.
+- The **Key Secret** lives only in the Edge Function secret `RAZORPAY_KEY_SECRET` (set via
+  `supabase secrets set` / dashboard) — never in the client bundle or repo. The Key ID is publishable.
+
+**Edge Functions.** `verify_jwt` is enabled, so both functions require a signed-in user; they also
+re-derive the caller from the JWT and use the service role only for the audit-row writes.
 
 ## Dependencies
 

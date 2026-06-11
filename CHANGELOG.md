@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0 — 2026-06-10
+
+Marketplace features: turned the consumer app into a two-sided marketplace.
+
+### Added
+- **Map + real location**: `react-native-maps` with gym price-pins, `expo-location` GPS, real
+  haversine distances and a working "Nearest" sort.
+- **Ratings & reviews**: `reviews` table + `submit_review` RPC (write-gated to people who've booked
+  the gym); reviews section + star-picker composer on gym detail.
+- **Live crowd**: check-ins now drive the gym's crowd bucket and freshness timestamp.
+- **Gym partner side**: `gym_owners` + partner RLS, `claim_gym` / `partner_checkin` RPCs, a partner
+  dashboard (payout after 15% commission, bookings, per-booking check-in) and a `expo-camera` QR
+  scanner. `member_name` denormalised onto bookings.
+- **Payments (Razorpay)**: `create-payment-order` / `verify-payment` Edge Functions (server-side
+  pricing + HMAC signature verification), in-app Razorpay Checkout via WebView, and a `payments`
+  audit table recording the commission/gym-payout split. Key Secret stays server-side.
+
+### Fixed
+- `metro.config.js` stubs `@supabase/supabase-js`'s optional `@opentelemetry/api` import (broke the
+  web bundle).
+
+### Notes
+- Payments are real in **test mode**; live money + gym payouts need Razorpay KYC + Route.
+
 ## 1.0.0 — 2026-06-10
 
 Production rebuild: from in-memory prototype to a real, backed, store-ready app.

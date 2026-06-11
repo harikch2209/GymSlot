@@ -25,6 +25,30 @@ psql "$DATABASE_URL" -f supabase/seed.sql   # or run seed.sql in the SQL editor
 Before launch, in the Supabase dashboard: **Auth → Providers → Email** — turn on
 "Confirm email", enable leaked-password protection, and set a password policy.
 
+### Edge Functions + secrets (payments)
+
+The Razorpay flow runs in two Edge Functions (`supabase/functions/`). Deploy them and set the
+secret (the **Key Secret never goes in the app or repo**):
+
+```bash
+supabase functions deploy create-payment-order --project-ref <ref>
+supabase functions deploy verify-payment --project-ref <ref>
+supabase secrets set RAZORPAY_KEY_SECRET=your_secret --project-ref <ref>
+# RAZORPAY_KEY_ID defaults in code; override with a secret if you rotate it.
+```
+
+Client-side, set `EXPO_PUBLIC_RAZORPAY_KEY_ID` in `.env` (publishable, safe to ship).
+
+**Going live with real money:** switch the Razorpay keys from test to live (KYC-verified merchant
+account required), and to actually settle each gym's payout use **Razorpay Route** — create a linked
+account per gym and add a `transfers` block when creating the order. The commission/payout split is
+already computed and stored in the `payments` table.
+
+### Maps key (Android standalone builds only)
+
+Maps work in Expo Go and on iOS (Apple Maps) with no key. For a standalone **Android** build, put a
+Google Maps API key in `app.json` → `android.config.googleMaps.apiKey` (placeholder is there).
+
 ## 2. Link EAS
 
 ```bash
@@ -76,6 +100,10 @@ Use the copy and reviewer answers in `docs/STORE_LISTING.md`. You'll also need:
 - [ ] App runs on a physical iOS and Android device (sign up → book → check-in → cancel → wallet updates)
 - [ ] VoiceOver + TalkBack sweep (see `ACCESSIBILITY.md`)
 - [ ] Email confirmation enabled in Supabase Auth
+- [ ] `RAZORPAY_KEY_SECRET` set as a Supabase secret; both Edge Functions deployed
+- [ ] Razorpay keys switched test → live (+ Route linked accounts) for real payouts
+- [ ] Google Maps API key set in `app.json` for the Android build
+- [ ] Location & camera permission strings reviewed (set in `app.json`)
 - [ ] Privacy Policy URL live and linked in both stores
 - [ ] Play **Data safety** form filled (answers in `docs/STORE_LISTING.md`)
 - [ ] Apple **App Privacy** "Nutrition label" filled (answers in `docs/STORE_LISTING.md`)
