@@ -2,8 +2,8 @@
 // SECURITY DEFINER RPCs so the server owns all money/ownership logic.
 import { supabase } from './supabase';
 import {
-  Booking, CreditEntry, Gym, GymEvent, Slot, Trainer,
-  mapBooking, mapEvent, mapGym, mapLedger, mapSlot, mapTrainer,
+  Booking, CreditEntry, Gym, GymEvent, Review, Slot, Trainer,
+  mapBooking, mapEvent, mapGym, mapLedger, mapReview, mapSlot, mapTrainer,
 } from '@/types';
 
 function unwrap<T>(data: T | null, error: { message: string } | null): T {
@@ -39,6 +39,20 @@ export async function fetchSlotsWithAvailability(gymId: string, date: string): P
   if (avail.error) throw new Error(avail.error.message);
   const remainingById = new Map((avail.data ?? []).map((a) => [a.slot_id, a.remaining]));
   return slots.map((s) => ({ ...s, remaining: remainingById.get(s.id) ?? s.capacity }));
+}
+
+export async function fetchReviews(gymId: string): Promise<Review[]> {
+  const { data, error } = await supabase
+    .from('reviews').select('*').eq('gym_id', gymId).order('created_at', { ascending: false });
+  return unwrap(data, error).map(mapReview);
+}
+
+/** Upsert the current user's review for a gym (server requires a prior booking). */
+export async function submitReview(gymId: string, rating: number, comment?: string): Promise<Review> {
+  const { data, error } = await supabase.rpc('submit_review', {
+    p_gym_id: gymId, p_rating: rating, p_comment: comment ?? undefined,
+  });
+  return mapReview(unwrap(data, error));
 }
 
 export async function fetchTrainers(): Promise<Trainer[]> {
@@ -139,4 +153,44 @@ export async function cancelBooking(id: string, asCredits: boolean): Promise<Boo
 export async function checkinBooking(id: string): Promise<Booking> {
   const { data, error } = await supabase.rpc('checkin', { p_booking_id: id });
   return mapBooking(unwrap(data, error));
+}
+
+// ---------- partner (gym side) ----------
+
+/** Platform commission taken from each booking; the rest is the gym's payout. */
+export const COMMISSION_RATE = 0.15;
+
+export async function fetchOwnedGyms(): Promise<Gym[]> {
+  const { data, error } = await supabase.from('gym_owners').select('gyms(*)');
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .map((r) => (r as { gyms: Parameters<typeof mapGym>[0] | null }).gyms)
+    .filter((g): g is NonNullable<typeof g> => !!g)
+    .map(mapGym);
+}
+
+export async function claimGym(gymId: string): Promise<void> {
+  const { error } = await supabase.rpc('claim_gym', { p_gym_id: gymId });
+  if (error) throw new Error(error.message);
+}
+
+/** Bookings across the gyms this partner owns (RLS also enforces ownership). */
+export async function fetchPartnerBookings(gymIds: string[]): Promise<Booking[]> {
+  if (!gymIds.length) return [];
+  const { data, error } = await supabase
+    .from('bookings').select('*').in('gym_id', gymIds).order('created_at', { ascending: false });
+  return unwrap(data, error).map(mapBooking);
+}
+
+export async function partnerCheckin(bookingId: string): Promise<Booking> {
+  const { data, error } = await supabase.rpc('partner_checkin', { p_booking_id: bookingId });
+  return mapBooking(unwrap(data, error));
+}
+
+/** Pull a booking id out of a scanned QR payload: GYMSLOT|KIND|<id>|<gymId>. */
+export function bookingIdFromQr(payload: string): string | null {
+  const parts = payload.split('|');
+  if (parts[0] !== 'GYMSLOT' || parts.length < 3) return null;
+  const id = parts[2];
+  return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
 }

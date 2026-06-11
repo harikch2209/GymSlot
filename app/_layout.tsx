@@ -42,6 +42,8 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="map" options={{ headerShown: false }} />
+      <Stack.Screen name="partner/index" options={{ headerShown: false }} />
+      <Stack.Screen name="partner/scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="gym/[id]" options={{ headerTransparent: true, headerTitle: '' }} />
       <Stack.Screen name="book/[id]" options={{ title: 'Book a slot' }} />
       <Stack.Screen name="event/[id]" options={{ headerTransparent: true, headerTitle: '' }} />

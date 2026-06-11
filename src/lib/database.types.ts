@@ -25,6 +25,7 @@ export type Database = {
           gym_name: string
           id: string
           kind: string
+          member_name: string | null
           qr_payload: string
           slot_id: string | null
           status: string
@@ -47,6 +48,7 @@ export type Database = {
           gym_name: string
           id?: string
           kind: string
+          member_name?: string | null
           qr_payload: string
           slot_id?: string | null
           status?: string
@@ -69,6 +71,7 @@ export type Database = {
           gym_name?: string
           id?: string
           kind?: string
+          member_name?: string | null
           qr_payload?: string
           slot_id?: string | null
           status?: string
@@ -110,6 +113,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      reviews: {
+        Row: {
+          id: string
+          gym_id: string
+          user_id: string | null
+          reviewer_name: string
+          rating: number
+          comment: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          gym_id: string
+          user_id?: string | null
+          reviewer_name: string
+          rating: number
+          comment?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          gym_id?: string
+          user_id?: string | null
+          reviewer_name?: string
+          rating?: number
+          comment?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       events: {
         Row: {
@@ -166,6 +207,32 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "events_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_owners: {
+        Row: {
+          created_at: string
+          gym_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_owners_gym_id_fkey"
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
@@ -353,6 +420,14 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: Database["public"]["Tables"]["bookings"]["Row"]
       }
+      claim_gym: {
+        Args: { p_gym_id: string }
+        Returns: Database["public"]["Tables"]["gym_owners"]["Row"]
+      }
+      partner_checkin: {
+        Args: { p_booking_id: string }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+      }
       create_booking: {
         Args: {
           p_amount_paid: number
@@ -384,6 +459,10 @@ export type Database = {
           remaining: number
           slot_id: string
         }[]
+      }
+      submit_review: {
+        Args: { p_gym_id: string; p_rating: number; p_comment?: string }
+        Returns: Database["public"]["Tables"]["reviews"]["Row"]
       }
     }
     Enums: {

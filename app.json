@@ -53,6 +53,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "GymSlot uses the camera so gym partners can scan member QR tickets to check them in."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

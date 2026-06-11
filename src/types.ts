@@ -79,6 +79,7 @@ export interface Booking {
   gymId: string | null;
   gymName: string;
   title: string;
+  memberName: string | null;
   date: string;
   time: string;
   durationMins: number;
@@ -99,6 +100,16 @@ export interface CreditEntry {
   reason: CreditReason;
   label: string;
   reference?: string | null;
+  at: string;
+}
+
+export interface Review {
+  id: string;
+  gymId: string;
+  userId: string | null;
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
   at: string;
 }
 
@@ -183,6 +194,7 @@ export function mapBooking(r: Row<'bookings'>): Booking {
     gymId: r.gym_id,
     gymName: r.gym_name,
     title: r.title,
+    memberName: r.member_name,
     date: r.booking_date,
     time: r.time,
     durationMins: r.duration_mins,
@@ -195,6 +207,18 @@ export function mapBooking(r: Row<'bookings'>): Booking {
     qrPayload: r.qr_payload,
     checkedIn: r.checked_in,
     createdAt: r.created_at,
+  };
+}
+
+export function mapReview(r: Row<'reviews'>): Review {
+  return {
+    id: r.id,
+    gymId: r.gym_id,
+    userId: r.user_id,
+    reviewerName: r.reviewer_name,
+    rating: r.rating,
+    comment: r.comment,
+    at: r.created_at,
   };
 }
 

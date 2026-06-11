@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchGym } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { CrowdBadge } from '@/components/CrowdBadge';
+import { ReviewsSection } from '@/components/ReviewsSection';
 import { AppText, Button, Card, Divider, EmptyState, Ionicons, Skeleton, Stars } from '@/components/ui';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { Amenity } from '@/types';
@@ -88,6 +89,10 @@ export default function GymDetailScreen() {
                 <AppText variant="smallStrong">{a}</AppText>
               </View>
             ))}
+          </View>
+
+          <View style={{ marginTop: spacing.xl }}>
+            <ReviewsSection gymId={gym.id} />
           </View>
 
           <Card style={{ marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

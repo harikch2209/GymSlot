@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -7,8 +8,8 @@ import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Avatar, Card, Divider, Ionicons } from '@/components/ui';
 import { inr } from '@/utils/format';
 
-const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; hint?: string }[] = [
-  { icon: 'business-outline', label: 'List your gym (Partner)' },
+const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: '/partner' }[] = [
+  { icon: 'business-outline', label: 'List your gym (Partner)', route: '/partner' },
   { icon: 'fitness-outline', label: 'Become a trainer' },
   { icon: 'notifications-outline', label: 'Notifications' },
   { icon: 'receipt-outline', label: 'GST invoices' },
@@ -20,6 +21,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { bookings, creditBalance } = useApp();
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
   const name = (user?.user_metadata?.full_name as string) ?? 'GymSlot member';
@@ -60,6 +62,7 @@ export default function ProfileScreen() {
         <Card style={{ marginTop: spacing.lg }} padded={false}>
           {MENU.map((m, i) => (
             <Pressable key={m.label} accessibilityRole="button" accessibilityLabel={m.label}
+              onPress={() => m.route && router.push(m.route)}
               style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.menuIcon}><Ionicons name={m.icon} size={18} color={colors.text} /></View>
               <AppText variant="bodyStrong" style={{ flex: 1 }}>{m.label}</AppText>
