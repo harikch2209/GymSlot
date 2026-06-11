@@ -110,6 +110,41 @@ Use the copy and reviewer answers in `docs/STORE_LISTING.md`. You'll also need:
 - [ ] Screenshots for 6.7" + 6.1" iPhone and Android phone uploaded
 - [ ] `version` / `buildNumber` / `versionCode` bumped (production profile auto-increments)
 
+## Test on a real device without Expo Go (Android APK)
+
+The fastest way to test the *real* app on a phone — no Expo Go, no dev server, not tied to any one
+machine — is an EAS **preview** build (it produces an installable `.apk`):
+
+```bash
+npm i -g eas-cli
+eas login
+eas init                         # writes extra.eas.projectId into app.json (one-time)
+eas build -p android --profile preview
+```
+
+EAS runs the build in the cloud and returns a URL + QR to **download and install the APK** directly.
+The Supabase + Razorpay env are baked into the profile (`eas.json`). Free tier includes a monthly
+build quota. For iOS you need an Apple Developer account (`eas build -p ios --profile preview` →
+TestFlight or an ad-hoc/simulator build).
+
+## Run the dev server in the cloud (Railway → QR in console)
+
+To keep the Expo dev server (for Expo Go) running off your own machine, host it on Railway and read
+the QR from the deploy logs. `scripts/cloud-dev.mjs` starts the tunnel and prints a scannable QR to
+stdout; `railway.json` wires it up.
+
+1. Create a Railway project from this GitHub repo (it auto-detects Node via Nixpacks).
+2. Set environment variables on the service:
+   - `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_RAZORPAY_KEY_ID`
+   - `NPM_CONFIG_PRODUCTION=false` (so `@expo/ngrok` + `qrcode` dev-deps install)
+3. Deploy. The start command is `npm run cloud:dev` (from `railway.json`).
+4. Open the service **logs** — once you see `SCAN IN EXPO GO`, scan the QR with Expo Go.
+
+Caveats: this runs a **development** server in the cloud (not a production build) — fine for testing,
+not for end users. The container must stay running; the first connection triggers a bundle (slow).
+Railway may warn "no port detected" — that's expected (connectivity goes through the Expo tunnel, not
+an HTTP port). For real distribution, use the Android APK / store builds above.
+
 ## OTA updates
 
 `runtimeVersion.policy = "appVersion"` is set. JS-only changes can ship without a store

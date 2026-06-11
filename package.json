@@ -7,6 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "tunnel": "expo start --tunnel",
+    "cloud:dev": "node scripts/cloud-dev.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
