@@ -49,6 +49,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-asset",
       "expo-secure-store",
       "expo-font",
       [
@@ -82,7 +83,7 @@
             "minSdkVersion": 24
           },
           "ios": {
-            "deploymentTarget": "16.4"
+            "deploymentTarget": "15.1"
           }
         }
       ]
