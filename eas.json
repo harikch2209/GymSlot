@@ -25,6 +25,15 @@
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T08abvuDeDF2AY"
       }
     },
+    "ios-simulator": {
+      "distribution": "internal",
+      "ios": { "simulator": true },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://achbypmmiblntmbhrijm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjaGJ5cG1taWJsbnRtYmhyaWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg1NDQsImV4cCI6MjA5NjY3NDU0NH0.jCKiH2tDUdtuHlTdBpyDhx8aEh2ht7B7A-MylFkCA7o",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T08abvuDeDF2AY"
+      }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true,
