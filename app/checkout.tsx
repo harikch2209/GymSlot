@@ -4,6 +4,9 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
+import { createPaymentOrder, verifyPayment } from '@/lib/api';
+import { RazorpayCheckout, type RazorpayOptions, type RazorpaySuccess } from '@/components/RazorpayCheckout';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Button, Card, Divider, Ionicons } from '@/components/ui';
 import { inr } from '@/utils/format';
@@ -19,7 +22,8 @@ export default function CheckoutScreen() {
   const p = useLocalSearchParams<Record<string, string>>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { creditBalance, createBooking } = useApp();
+  const { creditBalance, createBooking, refresh } = useApp();
+  const { user } = useAuth();
 
   const slotPrice = Number(p.slotPrice) || 0;
   const trainerFee = Number(p.trainerFee) || 0;
@@ -29,6 +33,7 @@ export default function CheckoutScreen() {
   const [method, setMethod] = useState<PayMethod>('UPI');
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rzp, setRzp] = useState<RazorpayOptions | null>(null);
 
   const creditsApplied = useMemo(
     () => (useCredits ? Math.min(creditBalance, subtotal) : 0),
@@ -40,20 +45,43 @@ export default function CheckoutScreen() {
     setPaying(true);
     setError(null);
     try {
-      // Payment gateway is simulated; the booking + wallet debit are real and
-      // validated server-side via the create_booking RPC.
-      await new Promise((r) => setTimeout(r, 700));
-      const booking = await createBooking({
-        kind: 'slot',
-        gymId: p.gymId, gymName: p.gymName, title: p.slotLabel,
-        date: p.day, time: p.time, durationMins: Number(p.duration),
-        amountPaid: payable, creditsUsed: creditsApplied,
-        slotId: p.slotId || null,
+      if (payable <= 0) {
+        // Fully covered by wallet credits — no gateway needed.
+        const booking = await createBooking({
+          kind: 'slot', gymId: p.gymId, gymName: p.gymName, title: p.slotLabel,
+          date: p.day, time: p.time, durationMins: Number(p.duration),
+          amountPaid: 0, creditsUsed: creditsApplied, slotId: p.slotId || null,
+          trainerId: p.trainerId || null, trainerName: p.trainerName || null,
+        });
+        router.replace(`/ticket/${booking.id}`);
+        return;
+      }
+      // Server creates the Razorpay order (price computed server-side).
+      const order = await createPaymentOrder({
+        kind: 'slot', gymId: p.gymId, gymName: p.gymName, slotId: p.slotId || null,
         trainerId: p.trainerId || null, trainerName: p.trainerName || null,
+        durationMins: Number(p.duration), title: p.slotLabel, day: p.day, time: p.time,
+        creditsToUse: creditsApplied,
       });
-      router.replace(`/ticket/${booking.id}`);
+      setRzp({
+        orderId: order.orderId, amount: order.amount, keyId: order.keyId,
+        description: `${p.gymName} · ${p.slotLabel}`,
+        email: user?.email, name: (user?.user_metadata?.full_name as string) ?? undefined,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Payment failed. Try again.');
+      setError(e instanceof Error ? e.message : 'Could not start payment. Try again.');
+      setPaying(false);
+    }
+  };
+
+  const onPaid = async (r: RazorpaySuccess) => {
+    setRzp(null);
+    try {
+      const { bookingId } = await verifyPayment(r.orderId, r.paymentId, r.signature);
+      await refresh();
+      router.replace(`/ticket/${bookingId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Payment verification failed.');
       setPaying(false);
     }
   };
@@ -124,8 +152,8 @@ export default function CheckoutScreen() {
         )}
 
         <View style={styles.secureRow}>
-          <Ionicons name="lock-closed" size={13} color={colors.textSubtle} />
-          <AppText variant="small" color={colors.textSubtle}>Payments are simulated in this build. No real charge is made.</AppText>
+          <Ionicons name="shield-checkmark" size={13} color={colors.textSubtle} />
+          <AppText variant="small" color={colors.textSubtle}>Secured by Razorpay (test mode). Use a test card — no real charge.</AppText>
         </View>
       </ScrollView>
 
@@ -134,9 +162,17 @@ export default function CheckoutScreen() {
           <AppText variant="tiny" color={colors.textSubtle}>PAYABLE NOW</AppText>
           <AppText variant="h2">{inr(payable)}</AppText>
         </View>
-        <Button title={payable > 0 ? `Pay with ${method === 'NetBanking' ? 'bank' : method}` : 'Confirm booking'}
+        <Button title={payable > 0 ? `Pay ${inr(payable)}` : 'Confirm booking'}
           loading={paying} onPress={pay} style={{ flex: 1, marginLeft: spacing.lg }} />
       </View>
+
+      <RazorpayCheckout
+        visible={!!rzp}
+        options={rzp}
+        onSuccess={onPaid}
+        onDismiss={() => { setRzp(null); setPaying(false); }}
+        onError={(msg) => { setRzp(null); setError(msg); setPaying(false); }}
+      />
     </View>
   );
 }

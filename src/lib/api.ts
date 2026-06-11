@@ -187,6 +187,46 @@ export async function partnerCheckin(bookingId: string): Promise<Booking> {
   return mapBooking(unwrap(data, error));
 }
 
+// ---------- payments (Razorpay via Edge Functions) ----------
+
+async function invokeFn<T>(name: string, body: object): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(name, { body: body as Record<string, unknown> });
+  if (error) {
+    let msg = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const j = ctx ? await ctx.json() : null;
+      if (j?.error) msg = j.error;
+    } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+export interface PaymentOrderInput {
+  kind: 'slot' | 'event';
+  gymId: string;
+  gymName: string;
+  slotId?: string | null;
+  eventId?: string | null;
+  trainerId?: string | null;
+  trainerName?: string | null;
+  durationMins: number;
+  title: string;
+  day: string;
+  time: string;
+  creditsToUse: number;
+}
+export interface PaymentOrder { orderId: string; amount: number; creditsApplied: number; keyId: string; currency: string }
+
+export function createPaymentOrder(input: PaymentOrderInput): Promise<PaymentOrder> {
+  return invokeFn<PaymentOrder>('create-payment-order', input);
+}
+
+export function verifyPayment(orderId: string, paymentId: string, signature: string): Promise<{ bookingId: string }> {
+  return invokeFn<{ bookingId: string }>('verify-payment', { orderId, paymentId, signature });
+}
+
 /** Pull a booking id out of a scanned QR payload: GYMSLOT|KIND|<id>|<gymId>. */
 export function bookingIdFromQr(payload: string): string | null {
   const parts = payload.split('|');
