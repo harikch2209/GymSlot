@@ -15,7 +15,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.gymslot.mobile",
       "buildNumber": "1",
-      "config": { "usesNonExemptEncryption": false },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "CFBundleDisplayName": "GymSlot",
         "ITSAppUsesNonExemptEncryption": false,
@@ -30,8 +32,14 @@
         "monochromeImage": "./assets/notification-icon.png",
         "backgroundColor": "#10B981"
       },
-      "permissions": ["INTERNET", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
+      "permissions": [
+        "INTERNET",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -62,27 +70,37 @@
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF",
-          "dark": { "backgroundColor": "#0E1116" }
+          "dark": {
+            "backgroundColor": "#0E1116"
+          }
         }
       ],
       [
         "expo-build-properties",
         {
-          "android": { "minSdkVersion": 24 },
-          "ios": { "deploymentTarget": "15.1" }
+          "android": {
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "extra": {
-      "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d83b70bd-1a29-4fb6-88bc-7d100efaec02"
+      }
+    },
+    "owner": "harikch2209"
   }
 }
