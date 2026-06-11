@@ -18,7 +18,8 @@
       "config": { "usesNonExemptEncryption": false },
       "infoPlist": {
         "CFBundleDisplayName": "GymSlot",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "GymSlot uses your location to show gyms near you and how far away they are."
       }
     },
     "android": {
@@ -29,9 +30,12 @@
         "monochromeImage": "./assets/notification-icon.png",
         "backgroundColor": "#10B981"
       },
-      "permissions": ["INTERNET"],
+      "permissions": ["INTERNET", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
       "blockedPermissions": ["android.permission.RECORD_AUDIO"],
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": { "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_API_KEY" }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -42,6 +46,12 @@
       "expo-router",
       "expo-secure-store",
       "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "GymSlot uses your location to show gyms near you and how far away they are."
+        }
+      ],
       [
         "expo-splash-screen",
         {

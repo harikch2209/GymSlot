@@ -36,3 +36,7 @@ android/
 *.ipa
 *.aab
 *.apk
+
+# local dev artifacts (machine/session-specific)
+expo-qr.png
+shot-*.png

@@ -28,6 +28,8 @@ export interface Gym {
   name: string;
   area: string;
   city: string;
+  lat: number | null;
+  lng: number | null;
   distanceKm: number | null;
   rating: number;
   reviews: number;
@@ -111,6 +113,8 @@ export function mapGym(r: Row<'gyms'>): Gym {
     name: r.name,
     area: r.area,
     city: r.city,
+    lat: r.lat,
+    lng: r.lng,
     distanceKm: null,
     rating: Number(r.rating),
     reviews: r.reviews,

@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchGyms } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
+import { useLocation } from '@/hooks/useLocation';
+import { distanceKm } from '@/utils/geo';
 import { GymCard } from '@/components/GymCard';
 import { AppText, Avatar, Chip, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { colors, radius, shadow, spacing, type as T } from '@/theme';
@@ -18,6 +20,7 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { effective } = useLocation();
   const { data, loading, error, refreshing, refresh, reload } = useResource(fetchGyms, []);
 
   const [query, setQuery] = useState('');
@@ -27,8 +30,19 @@ export default function DiscoverScreen() {
 
   const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] ?? 'there';
 
+  // Inject real distance from the user's (or fallback) location.
+  const located = useMemo<Gym[]>(
+    () =>
+      (data ?? []).map((g) =>
+        g.lat != null && g.lng != null
+          ? { ...g, distanceKm: Math.round(distanceKm(effective, { latitude: g.lat, longitude: g.lng }) * 10) / 10 }
+          : g,
+      ),
+    [data, effective],
+  );
+
   const gyms = useMemo<Gym[]>(() => {
-    let list = (data ?? []).filter((g) => {
+    let list = located.filter((g) => {
       const q = query.trim().toLowerCase();
       const matchQ = !q || g.name.toLowerCase().includes(q) || g.area.toLowerCase().includes(q);
       const matchC = !crowd || g.crowd === crowd;
@@ -40,7 +54,7 @@ export default function DiscoverScreen() {
         : sort === 'distance' ? (a.distanceKm ?? 99) - (b.distanceKm ?? 99)
           : b.rating - a.rating);
     return list;
-  }, [data, query, sort, crowd, amenity]);
+  }, [located, query, sort, crowd, amenity]);
 
   return (
     <View style={styles.container}>
@@ -128,6 +142,16 @@ export default function DiscoverScreen() {
           )
         }
       />
+
+      <Pressable
+        onPress={() => router.push('/map')}
+        accessibilityRole="button"
+        accessibilityLabel="View gyms on a map"
+        style={({ pressed }) => [styles.mapFab, pressed && { opacity: 0.9 }]}
+      >
+        <Ionicons name="map" size={17} color={colors.onPrimary} />
+        <AppText variant="smallStrong" color={colors.onPrimary}>Map</AppText>
+      </Pressable>
     </View>
   );
 }
@@ -143,4 +167,9 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 14, ...T.body, color: colors.text },
   filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   skeletonCard: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden', ...shadow.sm },
+  mapFab: {
+    position: 'absolute', alignSelf: 'center', bottom: spacing.lg, flexDirection: 'row',
+    alignItems: 'center', gap: 7, backgroundColor: colors.ink,
+    paddingHorizontal: spacing.xl, paddingVertical: 13, borderRadius: radius.pill, ...shadow.lg,
+  },
 });
