@@ -79,11 +79,10 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 24,
-            "kotlinVersion": "1.9.25"
+            "minSdkVersion": 24
           },
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "16.4"
           }
         }
       ]

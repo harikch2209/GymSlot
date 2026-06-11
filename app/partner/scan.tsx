@@ -96,7 +96,7 @@ export default function PartnerScan() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
   center: { alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   frame: { width: 250, height: 250, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', borderRadius: radius.xl },
   close: { position: 'absolute', left: spacing.lg, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   hint: { position: 'absolute', alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: spacing.lg, paddingVertical: 8, borderRadius: radius.pill },
