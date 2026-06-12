@@ -20,6 +20,15 @@ export default function BookingsScreen() {
   const filtered = bookings.filter((b) => (tab === 'upcoming' ? b.status === 'Confirmed' : b.status !== 'Confirmed'));
 
   const onCancel = (b: Booking) => {
+    const late = b.startsAt != null && new Date(b.startsAt).getTime() - Date.now() < 2 * 3_600_000;
+    if (late) {
+      Alert.alert('Cancel within 2 hours?',
+        'You’re within 2 hours of your slot, so no refund applies (no-show policy). Cancel anyway?', [
+          { text: 'Keep booking', style: 'cancel' },
+          { text: 'Cancel (no refund)', style: 'destructive', onPress: () => runCancel(b.id, false) },
+        ]);
+      return;
+    }
     Alert.alert('Cancel booking?', 'Choose how you want your refund. Instant credits include a 5% bonus.', [
       { text: 'Keep booking', style: 'cancel' },
       { text: 'Refund to source', onPress: () => runCancel(b.id, false) },
@@ -83,6 +92,10 @@ export default function BookingsScreen() {
               </View>
               <View style={styles.actions}>
                 <Button title="View QR" variant="secondary" size="sm" icon="qr-code-outline" onPress={() => router.push(`/ticket/${item.id}`)} />
+                {item.status === 'Confirmed' && item.kind === 'slot' && (
+                  <Button title="Reschedule" variant="secondary" size="sm" icon="swap-horizontal"
+                    onPress={() => router.push({ pathname: '/reschedule/[id]', params: { id: item.id } })} />
+                )}
                 {item.status === 'Confirmed' && (
                   <Button title="Cancel" variant="ghost" size="sm" loading={busyId === item.id} onPress={() => onCancel(item)} />
                 )}

@@ -7,6 +7,7 @@ import { useResource } from '@/hooks/useResource';
 import { useLocation } from '@/hooks/useLocation';
 import { distanceKm } from '@/utils/geo';
 import { GymCard } from '@/components/GymCard';
+import { isOpenNow } from '@/utils/format';
 import { AppText, Avatar, Chip, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { colors, radius, shadow, spacing, type as T } from '@/theme';
 import { Amenity, CrowdLevel, Gym } from '@/types';
@@ -29,6 +30,9 @@ export default function DiscoverScreen() {
   const [sort, setSort] = useState<SortKey>('rating');
   const [crowd, setCrowd] = useState<CrowdLevel | null>(null);
   const [amenity, setAmenity] = useState<Amenity | null>(null);
+  const [openNow, setOpenNow] = useState(false);
+  const [nearby, setNearby] = useState(false);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
 
   const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] ?? 'there';
 
@@ -49,14 +53,17 @@ export default function DiscoverScreen() {
       const matchQ = !q || g.name.toLowerCase().includes(q) || g.area.toLowerCase().includes(q);
       const matchC = !crowd || g.crowd === crowd;
       const matchA = !amenity || g.amenities.includes(amenity);
-      return matchQ && matchC && matchA;
+      const matchOpen = !openNow || isOpenNow(g.timings) === true;
+      const matchPrice = maxPrice == null || g.priceFrom <= maxPrice;
+      const matchNear = !nearby || (g.distanceKm != null && g.distanceKm <= 5);
+      return matchQ && matchC && matchA && matchOpen && matchPrice && matchNear;
     });
     list = [...list].sort((a, b) =>
       sort === 'price' ? a.priceFrom - b.priceFrom
         : sort === 'distance' ? (a.distanceKm ?? 99) - (b.distanceKm ?? 99)
           : b.rating - a.rating);
     return list;
-  }, [located, query, sort, crowd, amenity]);
+  }, [located, query, sort, crowd, amenity, openNow, nearby, maxPrice]);
 
   return (
     <View style={styles.container}>
@@ -127,6 +134,10 @@ export default function DiscoverScreen() {
             />
 
             <View style={styles.filterChips}>
+              <Chip label="Open now" active={openNow} onPress={() => setOpenNow(!openNow)} />
+              <Chip label="Within 5 km" active={nearby} onPress={() => setNearby(!nearby)} />
+              <Chip label="≤ ₹200" active={maxPrice === 200} onPress={() => setMaxPrice(maxPrice === 200 ? null : 200)} />
+              <Chip label="≤ ₹400" active={maxPrice === 400} onPress={() => setMaxPrice(maxPrice === 400 ? null : 400)} />
               {CROWD.map((c) => (
                 <Chip key={c} label={`${c} crowd`} active={crowd === c} onPress={() => setCrowd(crowd === c ? null : c)} />
               ))}

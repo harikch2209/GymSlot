@@ -95,6 +95,32 @@ export interface Trainer {
   languages: string[];
   avatarUrl: string | null;
   bio: string;
+  userId: string | null;
+  verified: boolean;
+  available: boolean;
+  serviceRadiusKm: number;
+  completedSessions: number;
+  cancelledCount: number;
+  lat: number | null;
+  lng: number | null;
+}
+
+export type TrainerRequestStatus = 'searching' | 'assigned' | 'unmatched' | 'cancelled';
+
+export interface TrainerRequest {
+  id: string;
+  bookingId: string;
+  userId: string;
+  trainerId: string | null;
+  gymId: string | null;
+  gymName: string | null;
+  durationMins: number;
+  fee: number;
+  goalNote: string | null;
+  status: TrainerRequestStatus;
+  createdAt: string;
+  cutoffAt: string | null;
+  assignedAt: string | null;
 }
 
 export type EventStatus = 'draft' | 'published' | 'cancelled';
@@ -310,6 +336,32 @@ export function mapTrainer(r: Row<'trainers'>): Trainer {
     languages: r.languages ?? [],
     avatarUrl: r.avatar_url,
     bio: r.bio ?? '',
+    userId: r.user_id,
+    verified: r.verified,
+    available: r.available,
+    serviceRadiusKm: r.service_radius_km,
+    completedSessions: r.completed_sessions,
+    cancelledCount: r.cancelled_count,
+    lat: r.lat,
+    lng: r.lng,
+  };
+}
+
+export function mapTrainerRequest(r: Row<'trainer_requests'>): TrainerRequest {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    userId: r.user_id,
+    trainerId: r.trainer_id,
+    gymId: r.gym_id,
+    gymName: r.gym_name,
+    durationMins: r.duration_mins,
+    fee: r.fee,
+    goalNote: r.goal_note,
+    status: r.status as TrainerRequestStatus,
+    createdAt: r.created_at,
+    cutoffAt: r.cutoff_at,
+    assignedAt: r.assigned_at,
   };
 }
 

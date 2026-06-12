@@ -5,9 +5,9 @@ import type { Database } from './database.types';
 import {
   AppNotification, Blackout, Booking, CreditEntry, CrowdLevel, EventAnalytics, Gym, GymEvent, GymKyc,
   NotificationPrefKey, NotificationPrefs, Report, ReportStatus, ReportSubjectType, Review,
-  Settlement, Slot, Trainer, TrainerReview,
+  Settlement, Slot, Trainer, TrainerRequest, TrainerReview,
   mapBlackout, mapBooking, mapEvent, mapGym, mapKyc, mapLedger, mapNotification,
-  mapNotificationPrefs, mapReport, mapReview, mapSlot, mapTrainer, mapTrainerReview,
+  mapNotificationPrefs, mapReport, mapReview, mapSlot, mapTrainer, mapTrainerRequest, mapTrainerReview,
 } from '@/types';
 
 type RpcArgs<F extends keyof Database['public']['Functions']> = Database['public']['Functions'][F]['Args'];
@@ -131,6 +131,82 @@ export async function issueGoodwill(userId: string, amount: number, label?: stri
 export async function fetchTrainers(): Promise<Trainer[]> {
   const { data, error } = await supabase.from('trainers').select('*').order('rating', { ascending: false });
   return unwrap(data, error).map(mapTrainer);
+}
+
+// ---------- trainer marketplace (Module 4) ----------
+
+export async function fetchMyTrainer(): Promise<Trainer | null> {
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return null;
+  const { data, error } = await supabase.from('trainers').select('*').eq('user_id', uid).maybeSingle();
+  const row = unwrap(data, error);
+  return row ? mapTrainer(row) : null;
+}
+
+export interface BecomeTrainerInput {
+  name: string; specializations: string[]; experienceYears: number; fee30: number; fee60: number;
+  languages: string[]; bio: string; lat?: number; lng?: number; serviceRadiusKm?: number;
+}
+export async function becomeTrainer(i: BecomeTrainerInput): Promise<Trainer> {
+  const { data, error } = await supabase.rpc('become_trainer', {
+    p_name: i.name, p_specializations: i.specializations, p_experience_years: i.experienceYears,
+    p_fee_30: i.fee30, p_fee_60: i.fee60, p_languages: i.languages, p_bio: i.bio,
+    p_lat: i.lat ?? undefined, p_lng: i.lng ?? undefined, p_service_radius_km: i.serviceRadiusKm ?? undefined,
+  });
+  return mapTrainer(unwrap(data, error));
+}
+
+export async function updateTrainerProfile(i: {
+  specializations: string[]; experienceYears: number; fee30: number; fee60: number;
+  languages: string[]; bio: string; serviceRadiusKm: number;
+}): Promise<Trainer> {
+  const { data, error } = await supabase.rpc('update_trainer_profile', {
+    p_specializations: i.specializations, p_experience_years: i.experienceYears, p_fee_30: i.fee30,
+    p_fee_60: i.fee60, p_languages: i.languages, p_bio: i.bio, p_service_radius_km: i.serviceRadiusKm,
+  });
+  return mapTrainer(unwrap(data, error));
+}
+
+export async function setTrainerAvailability(available: boolean): Promise<Trainer> {
+  const { data, error } = await supabase.rpc('set_trainer_availability', { p_available: available });
+  return mapTrainer(unwrap(data, error));
+}
+
+/** Trainer inbox: open requests I'm eligible for + ones assigned to me (RLS-scoped). */
+export async function fetchTrainerInbox(): Promise<TrainerRequest[]> {
+  const { data, error } = await supabase
+    .from('trainer_requests').select('*').order('created_at', { ascending: false }).limit(50);
+  return unwrap(data, error).map(mapTrainerRequest);
+}
+
+export async function acceptTrainerRequest(requestId: string): Promise<TrainerRequest> {
+  const { data, error } = await supabase.rpc('accept_trainer_request', { p_request_id: requestId });
+  return mapTrainerRequest(unwrap(data, error));
+}
+
+export async function trainerCancelAssignment(requestId: string): Promise<TrainerRequest> {
+  const { data, error } = await supabase.rpc('trainer_cancel_assignment', { p_request_id: requestId });
+  return mapTrainerRequest(unwrap(data, error));
+}
+
+export async function requestTrainer(bookingId: string, goalNote?: string): Promise<TrainerRequest> {
+  const { data, error } = await supabase.rpc('request_trainer', { p_booking_id: bookingId, p_goal_note: goalNote ?? undefined });
+  return mapTrainerRequest(unwrap(data, error));
+}
+
+export async function cancelTrainerRequest(requestId: string): Promise<TrainerRequest> {
+  const { data, error } = await supabase.rpc('cancel_trainer_request', { p_request_id: requestId });
+  return mapTrainerRequest(unwrap(data, error));
+}
+
+/** The latest trainer request for a booking (member side), if any. */
+export async function fetchBookingTrainerRequest(bookingId: string): Promise<TrainerRequest | null> {
+  const { data, error } = await supabase
+    .from('trainer_requests').select('*').eq('booking_id', bookingId)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const row = unwrap(data, error);
+  return row ? mapTrainerRequest(row) : null;
 }
 
 export async function fetchEvents(): Promise<GymEvent[]> {
@@ -286,6 +362,25 @@ export async function cancelBooking(id: string, asCredits: boolean): Promise<Boo
   const { data, error } = await supabase.rpc('cancel_booking', {
     p_booking_id: id, p_as_credits: asCredits,
   });
+  return mapBooking(unwrap(data, error));
+}
+
+export interface RescheduleInput {
+  bookingId: string;
+  slotId: string;
+  date: string;
+  time: string;
+  startsAt: string | null;
+  title: string;
+  durationMins: number;
+}
+
+export async function rescheduleBooking(i: RescheduleInput): Promise<Booking> {
+  const params = {
+    p_booking_id: i.bookingId, p_slot_id: i.slotId, p_booking_date: i.date, p_time: i.time,
+    p_starts_at: i.startsAt, p_title: i.title, p_duration_mins: i.durationMins,
+  };
+  const { data, error } = await supabase.rpc('reschedule_booking', params as RpcArgs<'reschedule_booking'>);
   return mapBooking(unwrap(data, error));
 }
 

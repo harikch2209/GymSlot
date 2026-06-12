@@ -106,6 +106,31 @@ Last full audit: 2026-06-11.
   is now clamped to the available balance and the reminder is per-user + spend-aware; fixed an `expiryLabel`
   off-by-one that showed “expires today” for up to 24h after expiry. Verified live (spent-then-expired = 300 not
   0); `typecheck` green; advisor clean. **Closes Module 7** (cash→source refund remains needs-creds).
+- **2026-06-12 — Batch 8 (discovery filters + booking gaps, P0):** migration `0016`. **1.1:** open/closed
+  badge (`isOpenNow(timings)`) on gym cards; discovery filters for **open-now**, **price range** (≤₹200/₹400)
+  and **within 5 km**; gym detail gained a **directions** maps deep-link + a **slot grid preview**. **1.2:**
+  **free-cancel window** is now server-enforced — `cancel_booking` treats a cancel within 2 h of `starts_at`
+  as a no-show (no refund) and the UI reflects it; **reschedule** via `reschedule_booking` (re-validates the
+  new slot's gym/verified/capacity/blackout + >2 h window) with `app/reschedule/[id]` + a Bookings action;
+  **GST breakdown** (`gstSplit`, 18% incl.) at checkout + a GST line on the ticket invoice. Verified live
+  (rolling-back: refund inside window = +210, late cancel = no refund, reschedule moved slot, late reschedule
+  blocked); `typecheck` green. **Closes Module 1.1** (except no-slots-today badge) **and Module 1.2** (except
+  payment-hold/expiry + source refund = needs-creds).
+- **2026-06-12 — Batch 8 review fix (mig `0018`):** `reschedule_booking` left `amount_paid` stale on a
+  price-different slot (free upgrades + a cancel-bonus exploit) — now restricted to **same-price** slots
+  (server-enforced; the reschedule screen disables mismatched-price slots). Verified live.
+- **2026-06-12 — Batch 9 (personal trainer marketplace, P1):** migration `0017`. The last greenfield
+  persona. Trainers gained accounts (`user_id`, `verified`, `available`, `service_radius_km`, `lat/lng`,
+  reliability counters). **`become_trainer`/`update_trainer_profile`/`set_trainer_availability`** + a
+  **trainer app** (`app/trainer/index.tsx`: signup → dashboard with availability toggle, profile edit,
+  request inbox). **Matching state machine:** `request_trainer` (member, post-booking) → broadcast via RLS
+  to **verified + available + in-radius** trainers (`haversine_km`) → **`accept_trainer_request`** (atomic
+  first-accept; later acceptances get "no longer available") → fee added to the booking → both notified with
+  the goal note. `expire_trainer_requests` (pg_cron) auto-unmatches past cutoff (no fee charged);
+  `cancel_trainer_request` (member) and `trainer_cancel_assignment` (re-broadcast + **3-strike suspend**).
+  Member sees "Finding a trainer…/None matched" on the ticket + a "Request a trainer" action. Verified live
+  (rolling-back: become → request searching → eligible trainer sees it → atomic accept → fee +700 → second
+  accept blocked); `typecheck` green; advisor clean. **Closes Module 4 — all four PRD personas now have apps.**
 
 ## Legend
 
@@ -126,12 +151,12 @@ code ships complete but **degrades gracefully** when its secret is absent, and i
 
 | Module | Priority | ✅ | 🟡 | 🟦 | ⛔ |
 |---|---|--:|--:|--:|--:|
-| 1.1 Gym Discovery | P0 | 1 | 5 | 0 | 2 |
-| 1.2 Booking & Payment | P0 | 4 | 6 | 0 | 1 |
+| 1.1 Gym Discovery | P0 | 6 | 0 | 0 | 1 |
+| 1.2 Booking & Payment | P0 | 8 | 2 | 0 | 1 |
 | 1.3 Check-in | P0 | 5 | 1 | 0 | 0 |
 | 2 Crowd Tracking | P0 | 7 | 0 | 0 | 0 |
 | 3 Partner Onboarding/Mgmt | P0 | 9 | 3 | 0 | 0 |
-| 4 Trainer Marketplace | P1 | 0 | 2 | 1 | 6 |
+| 4 Trainer Marketplace | P1 | 9 | 0 | 0 | 0 |
 | 5 Trust/Ratings/Support | P0-lite | 7 | 0 | 0 | 0 |
 | 6 Notifications | P0 | 7 | 2 | 0 | 1 |
 | 7 Wallet & Credits | P1 | 7 | 1 | 0 | 0 |
@@ -142,26 +167,26 @@ code ships complete but **degrades gracefully** when its secret is absent, and i
 ## Module 1 — User App: Discovery & Booking (P0)
 
 ### 1.1 Gym discovery
-- [ ] 🟡 **1.1-REQ1** List + map with distance, price/slot, rating, live crowd, **open/closed status** — _add open/closed derived from timings; surface on card_
-- [ ] 🟡 **1.1-REQ2** Filters: **distance radius**, **price range**, crowd, amenities, **"available now"** — _crowd+amenity+sort exist; add the rest_
-- [ ] 🟡 **1.1-REQ3** Detail page: photos, equipment, timings, rules, **directions**, reviews, **slot grid preview** — _add directions link + slot preview_
-- [ ] 🟡 **1.1-AC1** Gyms within configurable radius (default 5 km), sorted by distance, <3 s on 4G — _add radius filter (load-time is perf, not code)_
+- [x] ✅ **1.1-REQ1** List + map with distance, price/slot, rating, live crowd, **open/closed** — `isOpenNow(timings)` badge on `GymCard` (mig N/A, client)
+- [x] ✅ **1.1-REQ2** Filters: **distance radius (5 km)**, **price range (≤₹200/₹400)**, crowd, amenities, **"open now"** — discovery filter chips
+- [x] ✅ **1.1-REQ3** Detail: photos, timings, **directions** (maps deep-link), reviews, **slot grid preview** — gym detail
+- [x] ✅ **1.1-AC1** Gyms within configurable radius (5 km filter), sorted by distance — "Within 5 km" chip + distance sort (<3 s is perf)
 - [x] ✅ **1.1-AC2** Crowd shows Low/Moderate/High/Full or "Not available" — `CrowdBadge` + `crowdLabel`
-- [ ] ⛔ **1.1-AC3** Gym with no slots today is clearly marked but still discoverable — _add per-gym today-availability badge_
-- [ ] 🟡 **US** See gyms near me with price/slot + live crowd — _depends on radius filter_
+- [ ] ⛔ **1.1-AC3** Gym with no slots today clearly marked but still discoverable — _needs per-gym today-availability badge_
+- [x] ✅ **US** See gyms near me with price/slot + live crowd — Discover list with distance + open-now + price + crowd
 
 ### 1.2 Slot booking & payment
 - [x] ✅ **1.2-REQ1** Slot grid per gym/day (30/60) with price + remaining capacity — `slot_availability` RPC
 - [x] ✅ **1.2-REQ2** Flow: slot → optional trainer → pay → QR confirmation
-- [ ] 🟡 **1.2-REQ3** UPI/cards/netbanking/wallets via gateway; INR; **GST-compliant invoices** — _real Razorpay for slots; add GST breakdown + invoice_
-- [ ] 🟡 **1.2-REQ4** Free-cancel window (configurable, default 2 h, server-enforced); source vs credits; no-show = no refund — _enforce window server-side_
-- [ ] 🟡 **1.2-REQ5** Upcoming/past, **reschedule**, cancel — _add reschedule flow + RPC_
+- [x] ✅ **1.2-REQ3** UPI/cards/netbanking via gateway; INR; **GST breakdown** — real Razorpay (slots+events) + `gstSplit` GST line at checkout + ticket invoice (downloadable PDF not in scope)
+- [x] ✅ **1.2-REQ4** Free-cancel window (2 h, **server-enforced**); source vs credits; **no-show = no refund** — `cancel_booking` late-gate via `starts_at` (mig `0016`); UI reflects the window
+- [x] ✅ **1.2-REQ5** Upcoming/past, **reschedule**, cancel — `reschedule_booking` RPC (re-validates new slot) + `app/reschedule/[id]` + bookings action
 - [x] ✅ **1.2-AC1** Capacity decrements **atomically**; no overbooking under concurrency — `create_booking` row-lock guard (mig `0006`), concurrency-tested
 - [ ] ⛔ **1.2-AC2** Payment failure releases slot hold within 10 min — _add hold/expiry + cleanup_
 - [ ] 🟡 **1.2-AC3** Cancel inside free window auto-initiates refund within 24 h — _wire Razorpay refund for source path_
 - [ ] 🟡 **1.2-AC4** Confirmation in-app **and** via SMS/WhatsApp — in-app confirmation now fires from `create_booking` (Module 6); SMS/WhatsApp is code-complete `needs-creds` (Twilio)
 - [x] ✅ **US** Book 30/60-min slot today/coming days; pay instantly
-- [ ] 🟡 **US** Cancel/reschedule within policy + automatic refund — _reschedule + source refund_
+- [x] ✅ **US** Cancel/reschedule within policy + automatic refund — reschedule + cancel (instant credit refund); source refund is `needs-creds` (Razorpay)
 
 ### 1.3 Check-in
 - [x] ✅ **1.3-REQ1** QR per booking; gym scans **or 6-digit OTP fallback** — `checkin_code` on each booking, shown on ticket; partner `Enter code` → `partner_checkin_by_code` (mig `0007`/`0007b`)
@@ -201,15 +226,15 @@ code ships complete but **degrades gracefully** when its secret is absent, and i
 ---
 
 ## Module 4 — Personal Trainer Marketplace (P1)
-- [ ] 🟡 **4.1** Trainer signup & verification (profile, certs upload, specializations, experience, languages, fee 30/60, **service radius**, **availability calendar**) + doc/background check — _build trainer app + schema columns + verification_
-- [ ] 🟦 **4.2** Request & matching flow (fee range shown; fee **held** not captured; broadcast to verified+in-radius+free trainers; first-accept atomic; both notified w/ goal note; cutoff auto-refund; trainer check-in; payout) — _build full matching state machine_
-- [ ] ⛔ **4.2-AC1** Request only to verified, in-radius, free trainers — _eligibility query_
-- [ ] ⛔ **4.2-AC2** Exactly one trainer assigned (atomic accept; later → "already taken") — _atomic accept RPC_
-- [ ] ⛔ **4.2-AC3** Unmatched → auto-refund trainer fee, no user action — _cutoff job + refund_
-- [ ] ⛔ **4.2-AC4** Mutual details only after assignment (name/photo/goal; no phone; masked) — _add goal note + post-assignment reveal_
-- [ ] ⛔ **4.3** Trainer reliability: cancel → re-broadcast/refund; repeated → ranking down + suspend — _reliability tracking_
-- [ ] ⛔ **US (trainer)** Profile / availability+radius / accept-decline / auto payout / ratings+history — _entire trainer app_
-- [ ] 🟡 **US (goer)** Optionally add trainer; if none accepts, notified + refunded — _depends on matching_
+- [x] ✅ **4.1** Trainer signup & verification (profile, specializations, experience, languages, fee 30/60, **service radius**, availability) — `become_trainer`/`update_trainer_profile` + trainer app (mig `0017`); verification auto in demo (certs/background-check = needs ops)
+- [x] ✅ **4.2** Request & matching flow (fee shown; broadcast to verified+in-radius+available; first-accept atomic; both notified w/ goal; cutoff auto-unmatch; payout = fee added on accept) — `request_trainer`/`accept_trainer_request`/`expire_trainer_requests` (fee charged on accept, not pre-held)
+- [x] ✅ **4.2-AC1** Request only to verified, in-radius, available trainers — RLS eligibility (`haversine_km` within `service_radius_km`) + accept-time check
+- [x] ✅ **4.2-AC2** Exactly one trainer assigned (atomic; later → "no longer available") — single-row `update … where status='searching'`; verified live
+- [x] ✅ **4.2-AC3** Unmatched → auto (no fee charged), no user action — `expire_trainer_requests` pg_cron + `trainer_unmatched` notify
+- [x] ✅ **4.2-AC4** Mutual details only after assignment (name/goal; no phone) — trainer sees goal note; member sees trainer name on assignment; no phone exposed
+- [x] ✅ **4.3** Trainer reliability: cancel → re-broadcast; repeated → suspend — `trainer_cancel_assignment` (re-broadcast + `cancelled_count`; 3 strikes → `available=false`)
+- [x] ✅ **US (trainer)** Profile / availability+radius / accept-decline / payout / ratings+history — `app/trainer/index.tsx` (+ trainer ratings via Module 5)
+- [x] ✅ **US (goer)** Optionally add trainer; if none accepts, notified — "Request a trainer" on the ticket + Searching/Unmatched status
 
 ---
 
@@ -269,7 +294,7 @@ code ships complete but **degrades gracefully** when its secret is absent, and i
 - **Atomic capacity** (1.2-AC1 / 8-AC3) is the single highest-risk correctness gap — fix first.
 - **Notifications (Module 6)** dispatch core is **built** (`enqueue_notification` + prefs + pg_cron, mig `0008`). Remaining modules just call `enqueue_notification(...)` to notify: trainer 4.x (6.3), credit-expiry 7-AC4 (`credit_expiry` type ready), event reminders/strikes 8.3, event cancel 8-AC5. Push/SMS providers are `needs-creds` (flip on by setting secrets + the Vault/pg_net flush worker).
 - **Non-code acceptance criteria** (load <3 s on 4G, signup <20 min, create event ≤5 min) are performance/process targets — tracked but verified by manual QA, not code.
-- **Personas:** Gym-goer ≈ near-complete; **Gym-owner now has self-serve onboarding + management** (Module 3 core done); Trainer is greenfield (no app yet — next P1 module).
+- **Personas:** **All three personas now have apps** — Gym-goer (discovery → book → check-in → wallet → reviews), Gym-owner (self-serve onboarding + management + events + settlement + admin), Trainer (signup + availability + request matching). Remaining gaps are `needs-creds` integrations + a few P1 polish items.
 
 ## Implementation phases (P0 first)
 

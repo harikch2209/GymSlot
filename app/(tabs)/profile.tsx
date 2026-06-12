@@ -9,9 +9,9 @@ import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Avatar, Card, Divider, Ionicons } from '@/components/ui';
 import { inr } from '@/utils/format';
 
-const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: '/partner' | '/notifications' | '/notification-prefs' | '/help' }[] = [
+const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: '/partner' | '/notifications' | '/notification-prefs' | '/help' | '/trainer' }[] = [
   { icon: 'business-outline', label: 'List your gym (Partner)', route: '/partner' },
-  { icon: 'fitness-outline', label: 'Become a trainer' },
+  { icon: 'fitness-outline', label: 'Become a trainer', route: '/trainer' },
   { icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
   { icon: 'options-outline', label: 'Notification settings', route: '/notification-prefs' },
   { icon: 'receipt-outline', label: 'GST invoices' },

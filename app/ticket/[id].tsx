@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { fetchBooking, checkinBooking, checkoutBooking } from '@/lib/api';
+import { fetchBooking, checkinBooking, checkoutBooking, requestTrainer } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { useApp } from '@/context/AppContext';
 import { colors, radius, spacing } from '@/theme';
 import { AppText, Badge, Button, Card, Divider, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { QRTicket } from '@/components/QRTicket';
-import { inr } from '@/utils/format';
+import { gstSplit, inr } from '@/utils/format';
 
 export default function TicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,7 +19,20 @@ export default function TicketScreen() {
   const { data: booking, loading, error, reload } = useResource(() => fetchBooking(id), [id]);
   const [checking, setChecking] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const onRequestTrainer = () => {
+    const go = async (goal?: string) => {
+      setRequesting(true); setActionError(null);
+      try { await requestTrainer(id, goal); await Promise.all([reload(), refresh()]); }
+      catch (e) { setActionError(e instanceof Error ? e.message : 'Could not request a trainer.'); }
+      finally { setRequesting(false); }
+    };
+    if (Platform.OS === 'ios' && Alert.prompt) {
+      Alert.prompt('Request a trainer', 'Your goal for this session (optional):', (g) => go(g));
+    } else { go(); }
+  };
 
   const onCheckIn = async () => {
     setChecking(true);
@@ -84,7 +97,7 @@ export default function TicketScreen() {
           <AppText variant="h3">{booking.gymName}</AppText>
           <AppText variant="body" color={colors.textMuted} style={{ marginTop: 2 }}>{booking.date} · {booking.title}</AppText>
           <Divider />
-          {booking.trainerName && (
+          {booking.trainerName ? (
             <View style={styles.row}>
               <AppText variant="small" color={colors.textMuted}>Trainer</AppText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -92,9 +105,22 @@ export default function TicketScreen() {
                 <Badge label={booking.trainerStatus ?? 'Assigned'} color={colors.primary} bg={colors.primaryTint} />
               </View>
             </View>
-          )}
+          ) : booking.trainerStatus === 'Searching' ? (
+            <View style={styles.row}>
+              <AppText variant="small" color={colors.textMuted}>Trainer</AppText>
+              <Badge label="Finding a trainer…" color={colors.warning} bg={colors.warningTint} icon="search" />
+            </View>
+          ) : booking.trainerStatus === 'Unmatched' ? (
+            <View style={styles.row}>
+              <AppText variant="small" color={colors.textMuted}>Trainer</AppText>
+              <Badge label="None matched" color={colors.textMuted} bg={colors.surfaceAlt} />
+            </View>
+          ) : null}
           <Line label="Amount paid" value={inr(booking.amountPaid)} />
           {booking.creditsUsed > 0 && <Line label="Credits used" value={inr(booking.creditsUsed)} />}
+          {(booking.amountPaid + booking.creditsUsed) > 0 && (
+            <Line label="GST (18%, incl.)" value={inr(gstSplit(booking.amountPaid + booking.creditsUsed).tax)} />
+          )}
           <Line label="Status" value={booking.status} />
         </Card>
 
@@ -120,6 +146,11 @@ export default function TicketScreen() {
         {booking.checkedIn && !booking.checkedOut && (
           <Button title="Check out" variant="secondary" icon="exit-outline"
             loading={checkingOut} onPress={onCheckOut} fullWidth style={{ marginBottom: spacing.sm }} />
+        )}
+        {booking.kind === 'slot' && booking.status === 'Confirmed' && !booking.trainerId
+          && booking.trainerStatus !== 'Searching' && (
+          <Button title="Request a trainer" variant="secondary" icon="person-add-outline"
+            loading={requesting} onPress={onRequestTrainer} fullWidth style={{ marginBottom: spacing.sm }} />
         )}
         <Button title="Done" onPress={() => router.replace('/(tabs)/bookings')} fullWidth />
       </View>

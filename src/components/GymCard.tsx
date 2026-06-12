@@ -4,13 +4,14 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, shadow, spacing, type as T } from '@/theme';
 import { Gym } from '@/types';
-import { inr } from '@/utils/format';
+import { inr, isOpenNow } from '@/utils/format';
 import { AppText, Ionicons, Stars } from './ui';
 import { CrowdBadge } from './CrowdBadge';
 
 const BLUR = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
 export function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
+  const open = isOpenNow(gym.timings);
   return (
     <Pressable
       onPress={onPress}
@@ -49,6 +50,12 @@ export function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
           <AppText variant="small" color={colors.textMuted}>
             {gym.area}{gym.distanceKm != null ? ` · ${gym.distanceKm} km` : ''}
           </AppText>
+          {open != null && (
+            <View style={styles.openRow}>
+              <View style={[styles.dot, { backgroundColor: open ? colors.primary : colors.danger }]} />
+              <AppText variant="tiny" color={open ? colors.primary : colors.danger}>{open ? 'Open now' : 'Closed'}</AppText>
+            </View>
+          )}
         </View>
         <View style={styles.amenityRow}>
           {gym.amenities.slice(0, 4).map((a) => (
@@ -74,6 +81,8 @@ const styles = StyleSheet.create({
   body: { padding: spacing.lg, gap: 7 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  openRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
   amenityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
   amenityTag: { backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
 });

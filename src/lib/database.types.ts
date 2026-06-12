@@ -422,9 +422,15 @@ export type Database = {
         ]
       }
       trainers: {
-        Row: { avatar_url: string | null; bio: string | null; experience_years: number; fee_30: number; fee_60: number; id: string; languages: string[]; name: string; rating: number; specializations: string[] }
-        Insert: { avatar_url?: string | null; bio?: string | null; experience_years?: number; fee_30: number; fee_60: number; id: string; languages?: string[]; name: string; rating?: number; specializations?: string[] }
-        Update: { avatar_url?: string | null; bio?: string | null; experience_years?: number; fee_30?: number; fee_60?: number; id?: string; languages?: string[]; name?: string; rating?: number; specializations?: string[] }
+        Row: { available: boolean; avatar_url: string | null; bio: string | null; cancelled_count: number; completed_sessions: number; experience_years: number; fee_30: number; fee_60: number; id: string; languages: string[]; lat: number | null; lng: number | null; name: string; rating: number; service_radius_km: number; specializations: string[]; user_id: string | null; verified: boolean }
+        Insert: { available?: boolean; avatar_url?: string | null; bio?: string | null; cancelled_count?: number; completed_sessions?: number; experience_years?: number; fee_30: number; fee_60: number; id: string; languages?: string[]; lat?: number | null; lng?: number | null; name: string; rating?: number; service_radius_km?: number; specializations?: string[]; user_id?: string | null; verified?: boolean }
+        Update: { available?: boolean; avatar_url?: string | null; bio?: string | null; cancelled_count?: number; completed_sessions?: number; experience_years?: number; fee_30?: number; fee_60?: number; id?: string; languages?: string[]; lat?: number | null; lng?: number | null; name?: string; rating?: number; service_radius_km?: number; specializations?: string[]; user_id?: string | null; verified?: boolean }
+        Relationships: []
+      }
+      trainer_requests: {
+        Row: { assigned_at: string | null; booking_id: string; created_at: string; cutoff_at: string | null; duration_mins: number; fee: number; goal_note: string | null; gym_id: string | null; gym_name: string | null; id: string; lat: number | null; lng: number | null; status: string; trainer_id: string | null; user_id: string }
+        Insert: { assigned_at?: string | null; booking_id: string; created_at?: string; cutoff_at?: string | null; duration_mins: number; fee?: number; goal_note?: string | null; gym_id?: string | null; gym_name?: string | null; id?: string; lat?: number | null; lng?: number | null; status?: string; trainer_id?: string | null; user_id: string }
+        Update: { assigned_at?: string | null; booking_id?: string; created_at?: string; cutoff_at?: string | null; duration_mins?: number; fee?: number; goal_note?: string | null; gym_id?: string | null; gym_name?: string | null; id?: string; lat?: number | null; lng?: number | null; status?: string; trainer_id?: string | null; user_id?: string }
         Relationships: []
       }
     }
@@ -449,6 +455,41 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: Database["public"]["Tables"]["bookings"]["Row"]
         SetofOptions: { from: "*"; to: "bookings"; isOneToOne: true; isSetofReturn: false }
+      }
+      accept_trainer_request: {
+        Args: { p_request_id: string }
+        Returns: Database["public"]["Tables"]["trainer_requests"]["Row"]
+        SetofOptions: { from: "*"; to: "trainer_requests"; isOneToOne: true; isSetofReturn: false }
+      }
+      become_trainer: {
+        Args: { p_name: string; p_specializations: string[]; p_experience_years: number; p_fee_30: number; p_fee_60: number; p_languages: string[]; p_bio: string; p_lat?: number; p_lng?: number; p_service_radius_km?: number }
+        Returns: Database["public"]["Tables"]["trainers"]["Row"]
+        SetofOptions: { from: "*"; to: "trainers"; isOneToOne: true; isSetofReturn: false }
+      }
+      cancel_trainer_request: {
+        Args: { p_request_id: string }
+        Returns: Database["public"]["Tables"]["trainer_requests"]["Row"]
+        SetofOptions: { from: "*"; to: "trainer_requests"; isOneToOne: true; isSetofReturn: false }
+      }
+      request_trainer: {
+        Args: { p_booking_id: string; p_goal_note?: string }
+        Returns: Database["public"]["Tables"]["trainer_requests"]["Row"]
+        SetofOptions: { from: "*"; to: "trainer_requests"; isOneToOne: true; isSetofReturn: false }
+      }
+      set_trainer_availability: {
+        Args: { p_available: boolean }
+        Returns: Database["public"]["Tables"]["trainers"]["Row"]
+        SetofOptions: { from: "*"; to: "trainers"; isOneToOne: true; isSetofReturn: false }
+      }
+      trainer_cancel_assignment: {
+        Args: { p_request_id: string }
+        Returns: Database["public"]["Tables"]["trainer_requests"]["Row"]
+        SetofOptions: { from: "*"; to: "trainer_requests"; isOneToOne: true; isSetofReturn: false }
+      }
+      update_trainer_profile: {
+        Args: { p_specializations: string[]; p_experience_years: number; p_fee_30: number; p_fee_60: number; p_languages: string[]; p_bio: string; p_service_radius_km: number }
+        Returns: Database["public"]["Tables"]["trainers"]["Row"]
+        SetofOptions: { from: "*"; to: "trainers"; isOneToOne: true; isSetofReturn: false }
       }
       claim_gym: {
         Args: { p_gym_id: string }
@@ -573,6 +614,11 @@ export type Database = {
       recompute_crowd: { Args: { p_gym_id: string }; Returns: undefined }
       register_push_token: { Args: { p_platform?: string; p_token: string }; Returns: undefined }
       remove_blackout: { Args: { p_blackout_id: string }; Returns: undefined }
+      reschedule_booking: {
+        Args: { p_booking_date: string; p_booking_id: string; p_duration_mins: number; p_slot_id: string; p_starts_at: string; p_time: string; p_title: string }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+        SetofOptions: { from: "*"; to: "bookings"; isOneToOne: true; isSetofReturn: false }
+      }
       resolve_report: {
         Args: { p_report_id: string; p_resolution?: string; p_status: string }
         Returns: Database["public"]["Tables"]["reports"]["Row"]

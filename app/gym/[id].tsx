@@ -1,9 +1,9 @@
 import React from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Dimensions, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchGym, fetchGymEvents } from '@/lib/api';
+import { fetchGym, fetchGymEvents, fetchSlots } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { CrowdBadge } from '@/components/CrowdBadge';
 import { ReviewsSection } from '@/components/ReviewsSection';
@@ -25,6 +25,15 @@ export default function GymDetailScreen() {
   const insets = useSafeAreaInsets();
   const { data: gym, loading, error, reload } = useResource(() => fetchGym(id), [id]);
   const { data: gymEvents } = useResource(() => fetchGymEvents(id), [id]);
+  const { data: previewSlots } = useResource(() => fetchSlots(id), [id]);
+
+  const openDirections = () => {
+    if (!gym) return;
+    const q = gym.lat != null && gym.lng != null
+      ? `${gym.lat},${gym.lng}`
+      : encodeURIComponent(`${gym.name}, ${gym.area}, ${gym.city}`);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`).catch(() => {});
+  };
 
   if (loading) {
     return (
@@ -80,7 +89,30 @@ export default function GymDetailScreen() {
             <Divider />
             <Row icon="time-outline" label="Timings" value={gym.timings} />
             <Row icon="pricetag-outline" label="Price from" value={`${inr(gym.priceFrom)} / slot`} />
+            <Divider />
+            <Pressable onPress={openDirections} accessibilityRole="button" accessibilityLabel="Get directions"
+              style={({ pressed }) => [styles.dirRow, pressed && { opacity: 0.6 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="navigate-outline" size={16} color={colors.primary} />
+                <AppText variant="smallStrong" color={colors.primary}>Get directions</AppText>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
+            </Pressable>
           </Card>
+
+          {(previewSlots?.length ?? 0) > 0 && (
+            <>
+              <AppText variant="h2" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Slots</AppText>
+              <View style={styles.slotPreview}>
+                {(previewSlots ?? []).slice(0, 6).map((s) => (
+                  <View key={s.id} style={styles.slotChip}>
+                    <AppText variant="smallStrong">{s.time}</AppText>
+                    <AppText variant="tiny" color={colors.textSubtle}>{s.duration}m · {inr(s.price)}</AppText>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
 
           <AppText variant="h2" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Amenities</AppText>
           <View style={styles.amenityGrid}>
@@ -172,6 +204,9 @@ const styles = StyleSheet.create({
   },
   tipIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.warningTint, alignItems: 'center', justifyContent: 'center' },
   reportLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.xl, paddingVertical: spacing.sm },
+  dirRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  slotPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  slotChip: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 8, alignItems: 'center', ...shadow.sm },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, ...shadow.sm },
   eventIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
   footer: {

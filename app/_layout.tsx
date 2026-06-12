@@ -58,12 +58,14 @@ function RootNavigator() {
       <Stack.Screen name="partner/register" options={{ headerShown: false }} />
       <Stack.Screen name="partner/gym/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="partner/event-new" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="trainer/index" options={{ headerShown: false }} />
       <Stack.Screen name="partner/scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="gym/[id]" options={{ headerTransparent: true, headerTitle: '' }} />
       <Stack.Screen name="book/[id]" options={{ title: 'Book a slot' }} />
       <Stack.Screen name="event/[id]" options={{ headerTransparent: true, headerTitle: '' }} />
       <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
       <Stack.Screen name="ticket/[id]" options={{ title: 'Your booking', headerBackVisible: false }} />
+      <Stack.Screen name="reschedule/[id]" options={{ title: 'Reschedule' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="notification-prefs" options={{ title: 'Notification settings' }} />
       <Stack.Screen name="help" options={{ title: 'Help & support' }} />
