@@ -9,7 +9,7 @@ import { createPaymentOrder, verifyPayment } from '@/lib/api';
 import { RazorpayCheckout, type RazorpayOptions, type RazorpaySuccess } from '@/components/RazorpayCheckout';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Button, Card, Divider, Ionicons } from '@/components/ui';
-import { inr } from '@/utils/format';
+import { gstSplit, inr } from '@/utils/format';
 
 type PayMethod = 'UPI' | 'Card' | 'NetBanking';
 const METHODS: { key: PayMethod; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -52,6 +52,7 @@ export default function CheckoutScreen() {
           date: p.day, time: p.time, durationMins: Number(p.duration),
           amountPaid: 0, creditsUsed: creditsApplied, slotId: p.slotId || null,
           trainerId: p.trainerId || null, trainerName: p.trainerName || null,
+          startsAt: p.startsAt || null,
         });
         router.replace(`/ticket/${booking.id}`);
         return;
@@ -61,7 +62,7 @@ export default function CheckoutScreen() {
         kind: 'slot', gymId: p.gymId, gymName: p.gymName, slotId: p.slotId || null,
         trainerId: p.trainerId || null, trainerName: p.trainerName || null,
         durationMins: Number(p.duration), title: p.slotLabel, day: p.day, time: p.time,
-        creditsToUse: creditsApplied,
+        creditsToUse: creditsApplied, startsAt: p.startsAt || null,
       });
       setRzp({
         orderId: order.orderId, amount: order.amount, keyId: order.keyId,
@@ -100,7 +101,8 @@ export default function CheckoutScreen() {
           <Divider />
           <Line label="Slot fee" value={inr(slotPrice)} />
           {trainerFee > 0 && <Line label={`Trainer · ${p.trainerName}`} value={inr(trainerFee)} />}
-          <Line label="GST (incl.)" value="Included" muted />
+          <Line label="Base (excl. GST)" value={inr(gstSplit(subtotal).base)} muted />
+          <Line label="GST @ 18% (incl.)" value={inr(gstSplit(subtotal).tax)} muted />
         </Card>
 
         <Card style={{ marginTop: spacing.lg }}>

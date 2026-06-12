@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, EmptyState, Ionicons, Skeleton } from '@/components/ui';
-import { inr } from '@/utils/format';
+import { expiryLabel, inr } from '@/utils/format';
 import { CreditEntry, CreditReason } from '@/types';
 
 const REASON: Record<CreditReason, { icon: keyof typeof Ionicons.glyphMap; tint: string }> = {
@@ -19,6 +19,15 @@ const REASON: Record<CreditReason, { icon: keyof typeof Ionicons.glyphMap; tint:
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const { creditBalance, ledger, loading, refreshing, refresh } = useApp();
+
+  const now = Date.now();
+  const soonRaw = ledger
+    .filter((e) => e.amount > 0 && e.expiresAt != null
+      && new Date(e.expiresAt).getTime() > now
+      && new Date(e.expiresAt).getTime() - now <= 7 * 86_400_000)
+    .reduce((s, e) => s + e.amount, 0);
+  // Never claim more is expiring than is actually available (credits may already be spent).
+  const expiringSoon = Math.min(creditBalance, soonRaw);
 
   return (
     <View style={styles.container}>
@@ -40,14 +49,24 @@ export default function WalletScreen() {
                 Usable on any gym slot, trainer session, or paid event.
               </AppText>
             </LinearGradient>
+            {expiringSoon > 0 && (
+              <View style={styles.expiryBanner}>
+                <Ionicons name="hourglass-outline" size={16} color={colors.warning} />
+                <AppText variant="small" color={colors.text} style={{ flex: 1 }}>
+                  {inr(expiringSoon)} in credits expire within 7 days — use them soon.
+                </AppText>
+              </View>
+            )}
             <AppText variant="h3" style={{ marginBottom: spacing.sm }}>Transaction history</AppText>
           </View>
         }
         renderItem={({ item }: { item: CreditEntry }) => {
           const credit = item.amount >= 0;
           const meta = REASON[item.reason];
+          const exp = item.amount > 0 ? expiryLabel(item.expiresAt) : null;
+          const expired = exp === 'expired';
           return (
-            <View style={styles.entry}>
+            <View style={[styles.entry, expired && { opacity: 0.55 }]}>
               <View style={[styles.entryIcon, { backgroundColor: `${meta.tint}1A` }]}>
                 <Ionicons name={meta.icon} size={18} color={meta.tint} />
               </View>
@@ -55,9 +74,11 @@ export default function WalletScreen() {
                 <AppText variant="smallStrong" numberOfLines={1}>{item.label}</AppText>
                 <AppText variant="tiny" color={colors.textSubtle}>
                   {new Date(item.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {exp ? ` · ${exp}` : ''}
                 </AppText>
               </View>
-              <AppText variant="bodyStrong" color={credit ? colors.primary : colors.text}>
+              <AppText variant="bodyStrong" color={expired ? colors.textSubtle : credit ? colors.primary : colors.text}
+                style={expired ? { textDecorationLine: 'line-through' } : undefined}>
                 {credit ? '+' : '−'} {inr(Math.abs(item.amount))}
               </AppText>
             </View>
@@ -79,4 +100,5 @@ const styles = StyleSheet.create({
   balanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   entry: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, ...shadow.sm },
   entryIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  expiryBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.warningTint, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
 });

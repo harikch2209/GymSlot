@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Badge, Button, Card, Divider, EmptyState, Ionicons, Skeleton } from '@/components/ui';
+import { TrainerRatingSheet } from '@/components/TrainerRatingSheet';
 import { inr } from '@/utils/format';
 import { Booking } from '@/types';
 
@@ -14,6 +15,7 @@ export default function BookingsScreen() {
   const { bookings, cancelBooking, loading, refreshing, refresh } = useApp();
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rateTrainer, setRateTrainer] = useState<{ id: string; name: string } | null>(null);
 
   const filtered = bookings.filter((b) => (tab === 'upcoming' ? b.status === 'Confirmed' : b.status !== 'Confirmed'));
 
@@ -84,6 +86,10 @@ export default function BookingsScreen() {
                 {item.status === 'Confirmed' && (
                   <Button title="Cancel" variant="ghost" size="sm" loading={busyId === item.id} onPress={() => onCancel(item)} />
                 )}
+                {item.status === 'Completed' && item.trainerId && item.trainerName && (
+                  <Button title="Rate trainer" variant="ghost" size="sm" icon="star-outline"
+                    onPress={() => setRateTrainer({ id: item.trainerId!, name: item.trainerName! })} />
+                )}
               </View>
             </View>
           </Card>
@@ -101,6 +107,12 @@ export default function BookingsScreen() {
           )
         }
       />
+      {rateTrainer && (
+        <TrainerRatingSheet
+          trainerId={rateTrainer.id} trainerName={rateTrainer.name}
+          visible onClose={() => setRateTrainer(null)}
+        />
+      )}
     </View>
   );
 }

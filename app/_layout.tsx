@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { AppProvider } from '@/context/AppContext';
+import { NotificationsProvider } from '@/context/NotificationsContext';
 import { colors, fonts } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -54,12 +55,19 @@ function RootNavigator() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="map" options={{ headerShown: false }} />
       <Stack.Screen name="partner/index" options={{ headerShown: false }} />
+      <Stack.Screen name="partner/register" options={{ headerShown: false }} />
+      <Stack.Screen name="partner/gym/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="partner/event-new" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="partner/scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="gym/[id]" options={{ headerTransparent: true, headerTitle: '' }} />
       <Stack.Screen name="book/[id]" options={{ title: 'Book a slot' }} />
       <Stack.Screen name="event/[id]" options={{ headerTransparent: true, headerTitle: '' }} />
       <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
       <Stack.Screen name="ticket/[id]" options={{ title: 'Your booking', headerBackVisible: false }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+      <Stack.Screen name="notification-prefs" options={{ title: 'Notification settings' }} />
+      <Stack.Screen name="help" options={{ title: 'Help & support' }} />
+      <Stack.Screen name="report" options={{ title: 'Report a problem', presentation: 'modal' }} />
     </Stack>
   );
 }
@@ -93,7 +101,9 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <AuthProvider>
           <AppProvider>
-            <RootNavigator />
+            <NotificationsProvider>
+              <RootNavigator />
+            </NotificationsProvider>
           </AppProvider>
         </AuthProvider>
       </SafeAreaProvider>

@@ -31,7 +31,7 @@ export function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
           style={styles.scrim}
         />
         <View style={styles.crowdOverlay}>
-          <CrowdBadge level={gym.crowd} onLight />
+          <CrowdBadge level={gym.crowd} updatedMinsAgo={gym.crowdUpdatedMinsAgo} showTimestamp onLight />
         </View>
         <View style={styles.priceOverlay}>
           <AppText variant="tiny" color={colors.textMuted}>FROM</AppText>

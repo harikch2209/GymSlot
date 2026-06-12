@@ -11,6 +11,7 @@ import { AppText, Avatar, Chip, EmptyState, Ionicons, Skeleton } from '@/compone
 import { colors, radius, shadow, spacing, type as T } from '@/theme';
 import { Amenity, CrowdLevel, Gym } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationsContext';
 
 type SortKey = 'rating' | 'price' | 'distance';
 const CROWD: CrowdLevel[] = ['Low', 'Moderate', 'High'];
@@ -20,6 +21,7 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const { effective } = useLocation();
   const { data, loading, error, refreshing, refresh, reload } = useResource(fetchGyms, []);
 
@@ -75,7 +77,25 @@ export default function DiscoverScreen() {
                 </View>
                 <AppText variant="h1" style={{ marginTop: 2 }}>Hi {firstName} 👋</AppText>
               </View>
-              <Avatar name={(user?.user_metadata?.full_name as string) ?? 'GymSlot'} />
+              <View style={styles.headerActions}>
+                <Pressable
+                  onPress={() => router.push('/notifications')}
+                  accessibilityRole="button"
+                  accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.bell, pressed && { opacity: 0.8 }]}
+                >
+                  <Ionicons name="notifications-outline" size={22} color={colors.text} />
+                  {unreadCount > 0 && (
+                    <View style={styles.bellBadge}>
+                      <AppText variant="tiny" color={colors.onPrimary} style={{ fontSize: 9, lineHeight: 12 }}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </AppText>
+                    </View>
+                  )}
+                </Pressable>
+                <Avatar name={(user?.user_metadata?.full_name as string) ?? 'GymSlot'} />
+              </View>
             </View>
 
             <View style={styles.search}>
@@ -159,6 +179,16 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgSubtle },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  bell: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', ...shadow.sm,
+  },
+  bellBadge: {
+    position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8,
+    paddingHorizontal: 3, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.surface,
+  },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   search: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface,

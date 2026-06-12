@@ -69,6 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Unbind this device's push token while we still have the session, so pushes
+    // never route to the signed-out account and the next user re-registers.
+    try {
+      const { unregisterForPush } = await import('@/lib/push');
+      await unregisterForPush();
+    } catch { /* best-effort */ }
     await supabase.auth.signOut();
   }, []);
 

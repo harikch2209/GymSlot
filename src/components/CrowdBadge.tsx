@@ -29,9 +29,11 @@ export function CrowdBadge({
         <AppText variant="tiny" color={colors.text}>{crowdLabel(level)}</AppText>
       </View>
       {showTimestamp && updatedMinsAgo !== undefined && (
-        <AppText variant="small" color={colors.textSubtle}>
-          {level === 'Unknown' ? `No signal · ${ago(updatedMinsAgo)}` : `Updated ${ago(updatedMinsAgo)}`}
-        </AppText>
+        <View style={onLight ? styles.tsChip : undefined}>
+          <AppText variant={onLight ? 'tiny' : 'small'} color={onLight ? colors.text : colors.textSubtle}>
+            {level === 'Unknown' ? `No signal · ${ago(updatedMinsAgo)}` : `Updated ${ago(updatedMinsAgo)}`}
+          </AppText>
+        </View>
       )}
     </View>
   );
@@ -43,4 +45,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
+  tsChip: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
 });

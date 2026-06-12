@@ -30,10 +30,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const loadedOnce = useRef(false);
 
-  const creditBalance = useMemo(
-    () => ledger.reduce((sum, e) => sum + e.amount, 0),
-    [ledger],
-  );
+  // Mirrors the server credit_balance(): available = max(0, min(lifetime net,
+  // non-expired earned)). Earned credits share a 6-month window, so expiry order =
+  // FIFO spend order, and this avoids double-subtracting an already-spent grant.
+  const creditBalance = useMemo(() => {
+    const now = Date.now();
+    let raw = 0;
+    let nonExpiredEarned = 0;
+    for (const e of ledger) {
+      raw += e.amount;
+      const live = e.expiresAt == null || new Date(e.expiresAt).getTime() > now;
+      if (e.amount > 0 && live) nonExpiredEarned += e.amount;
+    }
+    return Math.max(0, Math.min(raw, nonExpiredEarned));
+  }, [ledger]);
 
   const load = useCallback(async (mode: 'initial' | 'refresh') => {
     if (!user) {

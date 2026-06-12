@@ -32,16 +32,24 @@ Deno.serve(async (req) => {
     let total = 0;
 
     if (kind === 'slot') {
-      const { data: slot } = await user.from('slots').select('price,duration').eq('id', b.slotId).maybeSingle();
+      const { data: slot } = await user.from('slots').select('price,duration,gym_id').eq('id', b.slotId).maybeSingle();
       if (!slot) return json({ error: 'slot not found' }, 400);
+      // Verification gate: only verified gyms can take payments (3-AC2).
+      const { data: gym } = await user.from('gyms').select('status').eq('id', slot.gym_id).maybeSingle();
+      if (!gym || gym.status !== 'verified') return json({ error: 'this gym is not available for booking yet' }, 400);
       total = slot.price;
       if (b.trainerId) {
         const { data: t } = await user.from('trainers').select('fee_30,fee_60').eq('id', b.trainerId).maybeSingle();
         if (t) total += slot.duration === 30 ? t.fee_30 : t.fee_60;
       }
     } else if (kind === 'event') {
-      const { data: ev } = await user.from('events').select('price').eq('id', b.eventId).maybeSingle();
+      const { data: ev } = await user.from('events').select('price,gym_id,status').eq('id', b.eventId).maybeSingle();
       if (!ev) return json({ error: 'event not found' }, 400);
+      if (ev.status !== 'published') return json({ error: 'this event is not open for booking' }, 400);
+      if (ev.gym_id) {
+        const { data: gym } = await user.from('gyms').select('status').eq('id', ev.gym_id).maybeSingle();
+        if (!gym || gym.status !== 'verified') return json({ error: 'this gym is not available for booking yet' }, 400);
+      }
       total = ev.price;
     } else {
       return json({ error: 'invalid kind' }, 400);
@@ -68,6 +76,7 @@ Deno.serve(async (req) => {
       gym_id: b.gymId ?? null, gym_name: b.gymName ?? null, slot_id: b.slotId ?? null, event_id: b.eventId ?? null,
       trainer_id: b.trainerId ?? null, trainer_name: b.trainerName ?? null,
       title: b.title, booking_date: b.day, time: b.time, duration_mins: b.durationMins,
+      starts_at: b.startsAt ?? null,
       amount: payable, credits_used: creditsApplied, commission, gym_payout: payable - commission, status: 'created',
     });
 

@@ -4,16 +4,18 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationsContext';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { AppText, Avatar, Card, Divider, Ionicons } from '@/components/ui';
 import { inr } from '@/utils/format';
 
-const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: '/partner' }[] = [
+const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: '/partner' | '/notifications' | '/notification-prefs' | '/help' }[] = [
   { icon: 'business-outline', label: 'List your gym (Partner)', route: '/partner' },
   { icon: 'fitness-outline', label: 'Become a trainer' },
-  { icon: 'notifications-outline', label: 'Notifications' },
+  { icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
+  { icon: 'options-outline', label: 'Notification settings', route: '/notification-prefs' },
   { icon: 'receipt-outline', label: 'GST invoices' },
-  { icon: 'chatbubble-ellipses-outline', label: 'Help & WhatsApp support' },
+  { icon: 'chatbubble-ellipses-outline', label: 'Help & WhatsApp support', route: '/help' },
   { icon: 'shield-checkmark-outline', label: 'Privacy & terms' },
 ];
 
@@ -21,6 +23,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { bookings, creditBalance } = useApp();
   const { user, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -66,6 +69,11 @@ export default function ProfileScreen() {
               style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.menuIcon}><Ionicons name={m.icon} size={18} color={colors.text} /></View>
               <AppText variant="bodyStrong" style={{ flex: 1 }}>{m.label}</AppText>
+              {m.label === 'Notifications' && unreadCount > 0 && (
+                <View style={styles.countBadge}>
+                  <AppText variant="tiny" color={colors.onPrimary}>{unreadCount > 99 ? '99+' : unreadCount}</AppText>
+                </View>
+              )}
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
               {i < MENU.length - 1 && <View style={styles.menuBorder} />}
             </Pressable>
@@ -104,6 +112,7 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 32, backgroundColor: colors.border },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 56 },
   menuIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  countBadge: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   menuBorder: { position: 'absolute', left: 64, right: 0, bottom: 0, height: 1, backgroundColor: colors.border },
   signOut: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.dangerTint, borderRadius: radius.md },
 });

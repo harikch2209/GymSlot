@@ -1,17 +1,25 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  COMMISSION_RATE, claimGym, fetchGyms, fetchOwnedGyms, fetchPartnerBookings, partnerCheckin,
+  claimGym, fetchGyms, fetchOwnedGyms, fetchPartnerBookings, fetchPendingGyms, fetchSettlement,
+  isAdmin, partnerCheckin, partnerSetCrowd, verifyGym,
 } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { AppText, Badge, Button, Card, EmptyState, Ionicons, Skeleton } from '@/components/ui';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { inr } from '@/utils/format';
-import { Booking } from '@/types';
+import { Booking, CrowdLevel, Gym, GymStatus } from '@/types';
+
+const STATUS_BADGE: Record<GymStatus, { label: string; color: string; bg: string }> = {
+  draft: { label: 'Draft', color: colors.textMuted, bg: colors.surfaceAlt },
+  pending: { label: 'Pending', color: colors.warning, bg: colors.warningTint },
+  verified: { label: 'Live', color: colors.primary, bg: colors.primaryTint },
+  rejected: { label: 'Needs changes', color: colors.danger, bg: colors.dangerTint },
+};
 
 export default function PartnerDashboard() {
   const router = useRouter();
@@ -19,29 +27,35 @@ export default function PartnerDashboard() {
   const owned = useResource(fetchOwnedGyms, []);
   const gymIds = useMemo(() => (owned.data ?? []).map((g) => g.id), [owned.data]);
   const bookingsRes = useResource(() => fetchPartnerBookings(gymIds), [gymIds.join(',')]);
+  const settlement = useResource(fetchSettlement, []);
+  const admin = useResource(isAdmin, []);
+  const pending = useResource(fetchPendingGyms, []);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  if (owned.loading) {
+  if (owned.loading && !owned.data) {
     return <View style={styles.container}><View style={{ padding: spacing.lg, gap: spacing.md, paddingTop: insets.top + spacing.xl }}>
       <Skeleton height={28} width="50%" /><Skeleton height={130} radius={radius.lg} /><Skeleton height={80} /></View></View>;
   }
 
   if (!owned.data?.length) {
-    return <ClaimGym insets={insets} onClaimed={() => { owned.reload(); }} onBack={() => router.back()} />;
+    return <Onboard insets={insets} onClaimed={() => owned.reload()} onBack={() => router.back()} onRegister={() => router.push('/partner/register')} />;
   }
 
   const bookings = bookingsRes.data ?? [];
   const completed = bookings.filter((b) => b.status === 'Completed');
-  const gross = completed.reduce((s, b) => s + b.amountPaid + b.creditsUsed, 0);
-  const commission = Math.round(gross * COMMISSION_RATE);
-  const payout = gross - commission;
-  const pending = bookings.filter((b) => b.status === 'Confirmed');
+  const pendingCheckins = bookings.filter((b) => b.status === 'Confirmed');
+  const s = settlement.data;
+  const isReviewer = admin.data === true;
+  const queue = isReviewer ? (pending.data ?? []) : [];
 
   const doCheckin = async (b: Booking) => {
     setBusyId(b.id);
     try { await partnerCheckin(b.id); await bookingsRes.refresh(); }
+    catch (e) { Alert.alert('Could not check in', e instanceof Error ? e.message : 'Try again.'); }
     finally { setBusyId(null); }
   };
+
+  const refreshAll = () => { bookingsRes.refresh(); settlement.refresh(); owned.refresh(); pending.refresh(); };
 
   return (
     <View style={styles.container}>
@@ -50,7 +64,7 @@ export default function PartnerDashboard() {
         keyExtractor={(b) => b.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: spacing.lg, paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl }}
-        refreshControl={<RefreshControl refreshing={bookingsRes.refreshing} onRefresh={bookingsRes.refresh} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={bookingsRes.refreshing} onRefresh={refreshAll} tintColor={colors.primary} />}
         ListHeaderComponent={
           <View>
             <View style={styles.topRow}>
@@ -62,21 +76,34 @@ export default function PartnerDashboard() {
             </View>
 
             <LinearGradient colors={[colors.ink, '#1C2330']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.earnCard}>
-              <AppText variant="smallStrong" color="rgba(255,255,255,0.7)">YOUR PAYOUT (after {Math.round(COMMISSION_RATE * 100)}% fee)</AppText>
-              <AppText variant="display" color="#fff" style={{ fontSize: 38, marginTop: 4 }}>{inr(payout)}</AppText>
+              <AppText variant="smallStrong" color="rgba(255,255,255,0.7)">SETTLED PAYOUT (Razorpay)</AppText>
+              <AppText variant="display" color="#fff" style={{ fontSize: 38, marginTop: 4 }}>{inr(s?.payout ?? 0)}</AppText>
               <View style={styles.earnRow}>
-                <Earn label="Gross" value={inr(gross)} />
-                <Earn label="Platform fee" value={`− ${inr(commission)}`} />
-                <Earn label="Sessions" value={String(completed.length)} />
+                <Earn label="Collected" value={inr(s?.gross ?? 0)} />
+                <Earn label="Platform fee" value={`− ${inr(s?.commission ?? 0)}`} />
+                <Earn label="Paid sessions" value={String(s?.sessions ?? 0)} />
               </View>
             </LinearGradient>
 
-            <View style={styles.gymsRow}>
-              {owned.data.map((g) => (
-                <View key={g.id} style={styles.gymChip}>
-                  <Image source={{ uri: g.imageUrl ?? undefined }} style={styles.gymThumb} contentFit="cover" />
-                  <AppText variant="smallStrong" numberOfLines={1} style={{ flex: 1 }}>{g.name}</AppText>
+            {isReviewer && queue.length > 0 && (
+              <>
+                <View style={styles.listHeader}>
+                  <AppText variant="h3">Awaiting verification</AppText>
+                  <Badge label={`${queue.length} to review`} color={colors.warning} bg={colors.warningTint} />
                 </View>
+                {queue.map((g) => <ReviewRow key={g.id} gym={g} onDone={() => { pending.reload(); owned.reload(); }} />)}
+              </>
+            )}
+
+            <View style={styles.listHeader}>
+              <AppText variant="h3">Your gyms</AppText>
+              <Pressable onPress={() => router.push('/partner/register')} hitSlop={8} accessibilityRole="button">
+                <AppText variant="smallStrong" color={colors.primary}>+ Register gym</AppText>
+              </Pressable>
+            </View>
+            <View style={{ gap: spacing.sm }}>
+              {owned.data.map((g) => (
+                <GymRow key={g.id} gym={g} onManage={() => router.push({ pathname: '/partner/gym/[id]', params: { id: g.id } })} onCrowd={owned.reload} />
               ))}
             </View>
 
@@ -84,7 +111,7 @@ export default function PartnerDashboard() {
 
             <View style={styles.listHeader}>
               <AppText variant="h3">Bookings</AppText>
-              {pending.length > 0 && <Badge label={`${pending.length} awaiting check-in`} color={colors.primary} bg={colors.primaryTint} />}
+              {pendingCheckins.length > 0 && <Badge label={`${pendingCheckins.length} awaiting check-in`} color={colors.primary} bg={colors.primaryTint} />}
             </View>
           </View>
         }
@@ -126,7 +153,81 @@ function Earn({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ClaimGym({ insets, onClaimed, onBack }: { insets: { top: number }; onClaimed: () => void; onBack: () => void }) {
+const CROWD_LEVELS: CrowdLevel[] = ['Low', 'Moderate', 'High', 'Full'];
+
+function GymRow({ gym, onManage, onCrowd }: { gym: Gym; onManage: () => void; onCrowd: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const badge = STATUS_BADGE[gym.status];
+  const set = async (level: CrowdLevel) => {
+    setBusy(true);
+    try { await partnerSetCrowd(gym.id, level); onCrowd(); } finally { setBusy(false); }
+  };
+  return (
+    <Card style={{ gap: spacing.sm }}>
+      <View style={styles.gymHeadRow}>
+        <View style={{ flex: 1, paddingRight: spacing.sm }}>
+          <AppText variant="bodyStrong" numberOfLines={1}>{gym.name}</AppText>
+          <AppText variant="tiny" color={colors.textSubtle}>{gym.area}</AppText>
+        </View>
+        <Badge label={badge.label} color={badge.color} bg={badge.bg} />
+        <Pressable onPress={onManage} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Manage ${gym.name}`} style={styles.manageBtn}>
+          <Ionicons name="settings-outline" size={18} color={colors.text} />
+        </Pressable>
+      </View>
+      {gym.status === 'verified' && (
+        <View style={styles.crowdBtns}>
+          {CROWD_LEVELS.map((l) => {
+            const active = gym.crowd === l;
+            return (
+              <Pressable key={l} onPress={() => set(l)} disabled={busy}
+                accessibilityRole="button" accessibilityState={{ selected: active }}
+                style={[styles.crowdBtn, active && styles.crowdBtnActive]}>
+                <AppText variant="tiny" color={active ? colors.onPrimary : colors.textMuted}>{l}</AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+    </Card>
+  );
+}
+
+function ReviewRow({ gym, onDone }: { gym: Gym; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const decide = async (approve: boolean, reason?: string) => {
+    setBusy(true);
+    try { await verifyGym(gym.id, approve, reason); onDone(); }
+    catch (e) { Alert.alert(approve ? 'Could not approve' : 'Could not reject', e instanceof Error ? e.message : 'Try again.'); }
+    finally { setBusy(false); }
+  };
+  const approve = () => decide(true);
+  const reject = () => {
+    if (Platform.OS === 'ios' && Alert.prompt) {
+      Alert.prompt('Reject gym', 'Reason for the owner (optional):', (reason) => decide(false, reason));
+    } else {
+      Alert.alert('Reject gym?', `${gym.name} will be sent back for changes.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reject', style: 'destructive', onPress: () => decide(false) },
+      ]);
+    }
+  };
+  return (
+    <Card style={{ marginBottom: spacing.sm, gap: spacing.sm }}>
+      <View style={styles.gymHeadRow}>
+        <View style={{ flex: 1 }}>
+          <AppText variant="bodyStrong" numberOfLines={1}>{gym.name}</AppText>
+          <AppText variant="tiny" color={colors.textSubtle}>{gym.area}, {gym.city} · from {inr(gym.priceFrom)}</AppText>
+        </View>
+      </View>
+      <View style={styles.row2}>
+        <Button title="Reject" variant="ghost" size="sm" onPress={reject} style={{ flex: 1 }} />
+        <Button title="Approve & publish" size="sm" loading={busy} onPress={approve} style={{ flex: 2 }} />
+      </View>
+    </Card>
+  );
+}
+
+function Onboard({ insets, onClaimed, onBack, onRegister }: { insets: { top: number }; onClaimed: () => void; onBack: () => void; onRegister: () => void }) {
   const all = useResource(fetchGyms, []);
   const [busyId, setBusyId] = useState<string | null>(null);
   const claim = async (id: string) => {
@@ -147,10 +248,17 @@ function ClaimGym({ insets, onClaimed, onBack }: { insets: { top: number }; onCl
         keyExtractor={(g) => g.id}
         contentContainerStyle={{ padding: spacing.lg }}
         ListHeaderComponent={
-          <AppText variant="small" color={colors.textMuted} style={{ marginBottom: spacing.md, lineHeight: 20 }}>
-            Pick a gym to manage. You'll see its bookings, check members in, and track your payouts.
-            (In production this is an approval + KYC flow; here you can claim one to try it.)
-          </AppText>
+          <View style={{ marginBottom: spacing.lg, gap: spacing.md }}>
+            <Card style={styles.registerCard}>
+              <View style={styles.registerIcon}><Ionicons name="business" size={22} color={colors.onPrimary} /></View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="h3">List your gym</AppText>
+                <AppText variant="small" color={colors.textMuted}>Register in minutes. Goes live after verification.</AppText>
+              </View>
+              <Button title="Start" size="sm" onPress={onRegister} />
+            </Card>
+            <AppText variant="smallStrong" color={colors.textMuted}>Or claim a demo gym to explore the tools</AppText>
+          </View>
         }
         renderItem={({ item }) => (
           <Card style={{ marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -173,10 +281,16 @@ const styles = StyleSheet.create({
   backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadow.sm },
   earnCard: { borderRadius: radius.lg, padding: spacing.xl, ...shadow.md },
   earnRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg },
-  gymsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
-  gymChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderRadius: radius.pill, padding: 4, paddingRight: spacing.md, ...shadow.sm },
   gymThumb: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
   listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xl, marginBottom: spacing.md },
   bookingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   memberIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  gymHeadRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  manageBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  crowdBtns: { flexDirection: 'row', gap: 4 },
+  crowdBtn: { flex: 1, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  crowdBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  row2: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  registerCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  registerIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

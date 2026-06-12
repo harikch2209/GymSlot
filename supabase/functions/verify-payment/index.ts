@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       p_booking_date: pay.booking_date, p_time: pay.time, p_duration_mins: pay.duration_mins,
       p_amount_paid: pay.amount, p_credits_used: pay.credits_used,
       p_slot_id: pay.slot_id, p_event_id: pay.event_id, p_trainer_id: pay.trainer_id, p_trainer_name: pay.trainer_name,
+      p_starts_at: pay.starts_at,
     });
     if (bErr) return json({ error: bErr.message }, 400);
 

@@ -5,11 +5,21 @@ type Row<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row'];
 
 export type CrowdLevel = 'Low' | 'Moderate' | 'High' | 'Full' | 'Unknown';
+export type GymStatus = 'draft' | 'pending' | 'verified' | 'rejected';
 export type Amenity =
   | 'Cardio' | 'Weights' | 'Shower' | 'Parking' | 'AC' | 'Locker' | 'CrossFit';
 export type BookingStatus = 'Confirmed' | 'Completed' | 'Cancelled';
 export type CreditReason =
   | 'refund' | 'cancellation-bonus' | 'promo' | 'goodwill' | 'spend';
+export type NotificationType =
+  | 'booking_confirmation' | 'booking_cancelled' | 'refund_status'
+  | 'slot_reminder' | 'event_reminder' | 'credit_expiry'
+  | 'trainer_assigned' | 'trainer_unmatched'
+  | 'gym_new_booking' | 'event_nearby';
+/** Keys accepted by the set_notification_pref RPC (snake_case, matches the column). */
+export type NotificationPrefKey =
+  | 'booking' | 'reminders' | 'trainer' | 'refunds' | 'events' | 'partner'
+  | 'push_enabled' | 'sms_enabled';
 
 export interface Slot {
   id: string;
@@ -36,11 +46,42 @@ export interface Gym {
   priceFrom: number;
   crowd: CrowdLevel;
   crowdUpdatedMinsAgo: number;
+  effectiveCapacity: number;
+  walkins: number;
   amenities: Amenity[];
   imageUrl: string | null;
   images: string[];
   about: string;
   timings: string;
+  /** Verification lifecycle — public discovery only shows 'verified'. */
+  status: GymStatus;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface GymKyc {
+  legalName: string | null;
+  pan: string | null;
+  gstin: string | null;
+  bankAccountName: string | null;
+  bankAccountNumber: string | null;
+  bankIfsc: string | null;
+}
+
+export interface Blackout {
+  id: string;
+  gymId: string;
+  date: string;
+  slotId: string | null;
+  reason: string | null;
+}
+
+export interface Settlement {
+  gross: number;
+  commission: number;
+  payout: number;
+  sessions: number;
 }
 
 export interface Trainer {
@@ -55,6 +96,8 @@ export interface Trainer {
   avatarUrl: string | null;
   bio: string;
 }
+
+export type EventStatus = 'draft' | 'published' | 'cancelled';
 
 export interface GymEvent {
   id: string;
@@ -71,6 +114,15 @@ export interface GymEvent {
   price: number;
   imageUrl: string | null;
   whatToBring: string;
+  status: EventStatus;
+  cancelledAt: string | null;
+}
+
+export interface EventAnalytics {
+  reservations: number;
+  attended: number;
+  newToGym: number;
+  revenue: number;
 }
 
 export interface Booking {
@@ -91,6 +143,12 @@ export interface Booking {
   status: BookingStatus;
   qrPayload: string;
   checkedIn: boolean;
+  checkedOut: boolean;
+  /** Short manual check-in code (OTP fallback when the QR won't scan). */
+  checkinCode: string | null;
+  /** Real slot start/end (null for legacy bookings & events). Drives the check-in window. */
+  startsAt: string | null;
+  endsAt: string | null;
   createdAt: string;
 }
 
@@ -100,6 +158,8 @@ export interface CreditEntry {
   reason: CreditReason;
   label: string;
   reference?: string | null;
+  /** Earned credits expire 6 months after issue (null = no expiry). */
+  expiresAt: string | null;
   at: string;
 }
 
@@ -110,7 +170,59 @@ export interface Review {
   reviewerName: string;
   rating: number;
   comment: string | null;
+  tags: string[];
   at: string;
+}
+
+export interface TrainerReview {
+  id: string;
+  trainerId: string;
+  userId: string;
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
+  tags: string[];
+  at: string;
+}
+
+export type ReportSubjectType = 'gym' | 'trainer' | 'booking' | 'event' | 'user';
+export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
+
+export interface Report {
+  id: string;
+  reporterId: string;
+  subjectType: ReportSubjectType;
+  subjectId: string | null;
+  subjectLabel: string | null;
+  reason: string;
+  details: string | null;
+  status: ReportStatus;
+  resolution: string | null;
+  at: string;
+  resolvedAt: string | null;
+}
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  /** Subject id for deep-linking (usually a booking id). */
+  reference: string | null;
+  read: boolean;
+  at: string;
+}
+
+export interface NotificationPrefs {
+  booking: boolean;
+  reminders: boolean;
+  trainer: boolean;
+  refunds: boolean;
+  events: boolean;
+  partner: boolean;
+  pushEnabled: boolean;
+  smsEnabled: boolean;
 }
 
 // ---------- mappers ----------
@@ -118,7 +230,13 @@ export interface Review {
 const minsAgo = (iso: string | null): number =>
   iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : 999;
 
+/** Crowd readings older than this are no longer trustworthy → shown as "Not available". */
+const CROWD_STALE_AFTER_MINS = 90;
+
 export function mapGym(r: Row<'gyms'>): Gym {
+  const updatedMins = minsAgo(r.crowd_updated_at);
+  let crowd = r.crowd as CrowdLevel;
+  if (crowd !== 'Unknown' && updatedMins > CROWD_STALE_AFTER_MINS) crowd = 'Unknown'; // staleness degrade
   return {
     id: r.id,
     name: r.name,
@@ -130,13 +248,40 @@ export function mapGym(r: Row<'gyms'>): Gym {
     rating: Number(r.rating),
     reviews: r.reviews,
     priceFrom: r.price_from,
-    crowd: r.crowd as CrowdLevel,
-    crowdUpdatedMinsAgo: minsAgo(r.crowd_updated_at),
+    crowd,
+    crowdUpdatedMinsAgo: updatedMins,
+    effectiveCapacity: r.effective_capacity,
+    walkins: r.walkins,
     amenities: (r.amenities ?? []) as Amenity[],
     imageUrl: r.image_url,
     images: r.images ?? [],
     about: r.about ?? '',
     timings: r.timings ?? '',
+    status: (r.status ?? 'verified') as GymStatus,
+    submittedAt: r.submitted_at,
+    verifiedAt: r.verified_at,
+    rejectionReason: r.rejection_reason,
+  };
+}
+
+export function mapKyc(r: Row<'gym_kyc'>): GymKyc {
+  return {
+    legalName: r.legal_name,
+    pan: r.pan,
+    gstin: r.gstin,
+    bankAccountName: r.bank_account_name,
+    bankAccountNumber: r.bank_account_number,
+    bankIfsc: r.bank_ifsc,
+  };
+}
+
+export function mapBlackout(r: Row<'gym_blackouts'>): Blackout {
+  return {
+    id: r.id,
+    gymId: r.gym_id,
+    date: r.blackout_date,
+    slotId: r.slot_id,
+    reason: r.reason,
   };
 }
 
@@ -184,6 +329,8 @@ export function mapEvent(r: Row<'events'>): GymEvent {
     price: r.price,
     imageUrl: r.image_url,
     whatToBring: r.what_to_bring ?? '',
+    status: (r.status ?? 'published') as EventStatus,
+    cancelledAt: r.cancelled_at,
   };
 }
 
@@ -206,6 +353,10 @@ export function mapBooking(r: Row<'bookings'>): Booking {
     status: r.status as BookingStatus,
     qrPayload: r.qr_payload,
     checkedIn: r.checked_in,
+    checkedOut: r.checked_out,
+    checkinCode: r.checkin_code,
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
     createdAt: r.created_at,
   };
 }
@@ -218,7 +369,37 @@ export function mapReview(r: Row<'reviews'>): Review {
     reviewerName: r.reviewer_name,
     rating: r.rating,
     comment: r.comment,
+    tags: r.tags ?? [],
     at: r.created_at,
+  };
+}
+
+export function mapTrainerReview(r: Row<'trainer_reviews'>): TrainerReview {
+  return {
+    id: r.id,
+    trainerId: r.trainer_id,
+    userId: r.user_id,
+    reviewerName: r.reviewer_name,
+    rating: r.rating,
+    comment: r.comment,
+    tags: r.tags ?? [],
+    at: r.created_at,
+  };
+}
+
+export function mapReport(r: Row<'reports'>): Report {
+  return {
+    id: r.id,
+    reporterId: r.reporter_id,
+    subjectType: r.subject_type as ReportSubjectType,
+    subjectId: r.subject_id,
+    subjectLabel: r.subject_label,
+    reason: r.reason,
+    details: r.details,
+    status: r.status as ReportStatus,
+    resolution: r.resolution,
+    at: r.created_at,
+    resolvedAt: r.resolved_at,
   };
 }
 
@@ -229,6 +410,33 @@ export function mapLedger(r: Row<'credit_ledger'>): CreditEntry {
     reason: r.reason as CreditReason,
     label: r.label,
     reference: r.reference,
+    expiresAt: r.expires_at,
     at: r.created_at,
+  };
+}
+
+export function mapNotification(r: Row<'notifications'>): AppNotification {
+  return {
+    id: r.id,
+    type: r.type,
+    title: r.title,
+    body: r.body,
+    data: (r.data ?? {}) as Record<string, unknown>,
+    reference: r.reference,
+    read: r.status === 'read',
+    at: r.created_at,
+  };
+}
+
+export function mapNotificationPrefs(r: Row<'notification_prefs'>): NotificationPrefs {
+  return {
+    booking: r.booking,
+    reminders: r.reminders,
+    trainer: r.trainer,
+    refunds: r.refunds,
+    events: r.events,
+    partner: r.partner,
+    pushEnabled: r.push_enabled,
+    smsEnabled: r.sms_enabled,
   };
 }

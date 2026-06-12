@@ -9,21 +9,21 @@ import { AppText, Button, Card, EmptyState, Ionicons, Skeleton } from '@/compone
 import { colors, radius, shadow, spacing } from '@/theme';
 import { Slot, Trainer } from '@/types';
 import { inr } from '@/utils/format';
-
-const DAYS = ['Today', 'Tomorrow', 'Wed', 'Thu'];
+import { slotStartIso, upcomingDays } from '@/utils/schedule';
 
 export default function BookScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const DAYS = useMemo(() => upcomingDays(4), []);
   const [day, setDay] = useState(0);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [wantTrainer, setWantTrainer] = useState(false);
   const [trainer, setTrainer] = useState<Trainer | null>(null);
 
   const gymRes = useResource(() => fetchGym(id), [id]);
-  const slotsRes = useResource(() => fetchSlotsWithAvailability(id, DAYS[day]), [id, day]);
+  const slotsRes = useResource(() => fetchSlotsWithAvailability(id, DAYS[day].label), [id, day]);
   const trainersRes = useResource(fetchTrainers, []);
 
   const gym = gymRes.data;
@@ -55,7 +55,8 @@ export default function BookScreen() {
       params: {
         gymId: gym.id, gymName: gym.name, gymImage: gym.imageUrl ?? '',
         slotId: slot.id, slotLabel: `${slot.time} · ${slot.duration} min`,
-        day: DAYS[day], time: slot.time, duration: String(slot.duration), slotPrice: String(slot.price),
+        day: DAYS[day].label, startsAt: slotStartIso(DAYS[day].date, slot.time) ?? '',
+        time: slot.time, duration: String(slot.duration), slotPrice: String(slot.price),
         trainerId: wantTrainer && trainer ? trainer.id : '',
         trainerName: wantTrainer && trainer ? trainer.name : '',
         trainerFee: String(trainerFee),
@@ -78,10 +79,10 @@ export default function BookScreen() {
         <AppText variant="h3" style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>Select day</AppText>
         <View style={styles.dayRow}>
           {DAYS.map((d, i) => (
-            <Pressable key={d} onPress={() => { setDay(i); setSlot(null); }}
+            <Pressable key={d.label} onPress={() => { setDay(i); setSlot(null); }}
               accessibilityRole="button" accessibilityState={{ selected: day === i }}
               style={[styles.dayChip, day === i && styles.dayChipActive]}>
-              <AppText variant="smallStrong" color={day === i ? colors.onPrimary : colors.textMuted}>{d}</AppText>
+              <AppText variant="smallStrong" color={day === i ? colors.onPrimary : colors.textMuted}>{d.label}</AppText>
             </Pressable>
           ))}
         </View>

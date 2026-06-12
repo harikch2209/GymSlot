@@ -1,13 +1,13 @@
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchGym } from '@/lib/api';
+import { fetchGym, fetchGymEvents } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { CrowdBadge } from '@/components/CrowdBadge';
 import { ReviewsSection } from '@/components/ReviewsSection';
-import { AppText, Button, Card, Divider, EmptyState, Ionicons, Skeleton, Stars } from '@/components/ui';
+import { AppText, Badge, Button, Card, Divider, EmptyState, Ionicons, Skeleton, Stars } from '@/components/ui';
 import { colors, radius, shadow, spacing } from '@/theme';
 import { Amenity } from '@/types';
 import { inr } from '@/utils/format';
@@ -24,6 +24,7 @@ export default function GymDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: gym, loading, error, reload } = useResource(() => fetchGym(id), [id]);
+  const { data: gymEvents } = useResource(() => fetchGymEvents(id), [id]);
 
   if (loading) {
     return (
@@ -91,6 +92,26 @@ export default function GymDetailScreen() {
             ))}
           </View>
 
+          {(gymEvents?.length ?? 0) > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <AppText variant="h2" style={{ marginBottom: spacing.md }}>Events here</AppText>
+              <View style={{ gap: spacing.sm }}>
+                {(gymEvents ?? []).map((e) => (
+                  <Pressable key={e.id} onPress={() => router.push(`/event/${e.id}`)}
+                    accessibilityRole="button" accessibilityLabel={`${e.title}, ${e.date}`}
+                    style={({ pressed }) => [styles.eventRow, pressed && { opacity: 0.9 }]}>
+                    <View style={styles.eventIcon}><Ionicons name="flash" size={16} color={colors.accent} /></View>
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="bodyStrong" numberOfLines={1}>{e.title}</AppText>
+                      <AppText variant="tiny" color={colors.textSubtle}>{e.date}{e.time ? ` · ${e.time}` : ''}</AppText>
+                    </View>
+                    <Badge label={e.price === 0 ? 'FREE' : inr(e.price)} color="#fff" bg={e.price === 0 ? colors.primary : colors.accent} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
           <View style={{ marginTop: spacing.xl }}>
             <ReviewsSection gymId={gym.id} />
           </View>
@@ -103,6 +124,15 @@ export default function GymDetailScreen() {
               Off-peak slots are cheaper and far less crowded. Pick a slot on the next screen.
             </AppText>
           </Card>
+
+          <Pressable
+            onPress={() => router.push({ pathname: '/report', params: { type: 'gym', id: gym.id, label: gym.name } })}
+            accessibilityRole="button" accessibilityLabel="Report this gym"
+            style={({ pressed }) => [styles.reportLink, pressed && { opacity: 0.6 }]}
+          >
+            <Ionicons name="flag-outline" size={15} color={colors.textSubtle} />
+            <AppText variant="smallStrong" color={colors.textSubtle}>Report this gym</AppText>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -141,6 +171,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 10, ...shadow.sm,
   },
   tipIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.warningTint, alignItems: 'center', justifyContent: 'center' },
+  reportLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.xl, paddingVertical: spacing.sm },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, ...shadow.sm },
+  eventIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accentTint, alignItems: 'center', justifyContent: 'center' },
   footer: {
     position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg, paddingTop: spacing.md,
     backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border,

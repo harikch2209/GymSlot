@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { fetchBooking, checkinBooking } from '@/lib/api';
+import { fetchBooking, checkinBooking, checkoutBooking } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { useApp } from '@/context/AppContext';
 import { colors, radius, spacing } from '@/theme';
@@ -18,15 +18,34 @@ export default function TicketScreen() {
   const { refresh } = useApp();
   const { data: booking, loading, error, reload } = useResource(() => fetchBooking(id), [id]);
   const [checking, setChecking] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const onCheckIn = async () => {
     setChecking(true);
+    setActionError(null);
     try {
       await checkinBooking(id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       await Promise.all([reload(), refresh()]);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not check in.');
     } finally {
       setChecking(false);
+    }
+  };
+
+  const onCheckOut = async () => {
+    setCheckingOut(true);
+    setActionError(null);
+    try {
+      await checkoutBooking(id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      await Promise.all([reload(), refresh()]);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not check out.');
+    } finally {
+      setCheckingOut(false);
     }
   };
 
@@ -53,6 +72,12 @@ export default function TicketScreen() {
 
         <Card style={{ alignItems: 'center', marginTop: spacing.lg }}>
           <QRTicket payload={booking.qrPayload} checkedIn={booking.checkedIn} />
+          {!!booking.checkinCode && !booking.checkedIn && (
+            <View style={styles.codeBox}>
+              <AppText variant="small" color={colors.textMuted}>Can&apos;t scan? Give this code</AppText>
+              <AppText variant="h2" style={{ letterSpacing: 6, marginTop: 2 }}>{booking.checkinCode}</AppText>
+            </View>
+          )}
         </Card>
 
         <Card style={{ marginTop: spacing.lg }}>
@@ -82,9 +107,19 @@ export default function TicketScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        {!!actionError && (
+          <View style={styles.actionErr}>
+            <Ionicons name="alert-circle" size={16} color={colors.danger} />
+            <AppText variant="small" color={colors.danger} style={{ flex: 1 }}>{actionError}</AppText>
+          </View>
+        )}
         {!booking.checkedIn && booking.status === 'Confirmed' && (
-          <Button title="Simulate gym check-in" variant="secondary" icon="qr-code-outline"
+          <Button title="Check in — I'm at the gym" variant="secondary" icon="qr-code-outline"
             loading={checking} onPress={onCheckIn} fullWidth style={{ marginBottom: spacing.sm }} />
+        )}
+        {booking.checkedIn && !booking.checkedOut && (
+          <Button title="Check out" variant="secondary" icon="exit-outline"
+            loading={checkingOut} onPress={onCheckOut} fullWidth style={{ marginBottom: spacing.sm }} />
         )}
         <Button title="Done" onPress={() => router.replace('/(tabs)/bookings')} fullWidth />
       </View>
@@ -108,5 +143,7 @@ const styles = StyleSheet.create({
   notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
   policy: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.surfaceAlt, borderRadius: radius.md },
+  codeBox: { alignItems: 'center', marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, alignSelf: 'stretch' },
+  actionErr: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg, paddingTop: spacing.md, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border },
 });

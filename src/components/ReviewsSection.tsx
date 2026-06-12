@@ -5,7 +5,9 @@ import { fetchReviews, submitReview } from '@/lib/api';
 import { useResource } from '@/hooks/useResource';
 import { useAuth } from '@/context/AuthContext';
 import { colors, radius, shadow, spacing, type as Ty } from '@/theme';
-import { AppText, Button, Card, Ionicons } from './ui';
+import { AppText, Button, Card, Chip, Ionicons } from './ui';
+
+const GYM_TAGS = ['Clean', 'Great equipment', 'Crowd accurate', 'Friendly staff', 'Good value', 'Crowded', 'Needs upkeep'];
 
 function StarRow({ value, size = 14, onChange }: { value: number; size?: number; onChange?: (n: number) => void }) {
   return (
@@ -36,12 +38,16 @@ export function ReviewsSection({ gymId }: { gymId: string }) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const toggleTag = (t: string) => setTags((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
 
   const openComposer = () => {
     setRating(mine?.rating ?? 5);
     setComment(mine?.comment ?? '');
+    setTags(mine?.tags ?? []);
     setError(null);
     setOpen(true);
   };
@@ -49,7 +55,7 @@ export function ReviewsSection({ gymId }: { gymId: string }) {
   const submit = async () => {
     setBusy(true); setError(null);
     try {
-      await submitReview(gymId, rating, comment);
+      await submitReview(gymId, rating, comment, tags);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setOpen(false);
       reload();
@@ -95,6 +101,13 @@ export function ReviewsSection({ gymId }: { gymId: string }) {
                 <StarRow value={r.rating} size={12} />
               </View>
               {!!r.comment && <AppText variant="small" color={colors.textMuted} style={{ marginTop: 3, lineHeight: 19 }}>{r.comment}</AppText>}
+              {r.tags.length > 0 && (
+                <View style={styles.tagRow}>
+                  {r.tags.map((t) => (
+                    <View key={t} style={styles.tag}><AppText variant="tiny" color={colors.textMuted}>{t}</AppText></View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         ))}
@@ -107,6 +120,9 @@ export function ReviewsSection({ gymId }: { gymId: string }) {
           <AppText variant="h3">{mine ? 'Edit your review' : 'Rate this gym'}</AppText>
           <View style={{ alignItems: 'center', marginVertical: spacing.lg }}>
             <StarRow value={rating} size={34} onChange={setRating} />
+          </View>
+          <View style={styles.composerTags}>
+            {GYM_TAGS.map((t) => <Chip key={t} label={t} active={tags.includes(t)} onPress={() => toggleTag(t)} />)}
           </View>
           <TextInput
             value={comment} onChangeText={setComment} multiline
@@ -144,4 +160,7 @@ const styles = StyleSheet.create({
     padding: spacing.md, minHeight: 90, textAlignVertical: 'top',
   },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  tag: { backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  composerTags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md, justifyContent: 'center' },
 });
